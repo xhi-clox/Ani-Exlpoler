@@ -1,0 +1,197 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.2.0
+  description: Anime metadata API — browse trending, seasonal, upcoming, search, and view anime details.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: anime
+    description: Anime browsing and search
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /anime/trending:
+    get:
+      operationId: getTrending
+      tags: [anime]
+      summary: Get trending anime
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Trending anime list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimeListResponse"
+
+  /anime/recent:
+    get:
+      operationId: getRecent
+      tags: [anime]
+      summary: Get current season anime
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Current season anime list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimeListResponse"
+
+  /anime/upcoming:
+    get:
+      operationId: getUpcoming
+      tags: [anime]
+      summary: Get upcoming season anime
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Upcoming season anime list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimeListResponse"
+
+  /anime/search:
+    get:
+      operationId: searchAnime
+      tags: [anime]
+      summary: Search anime by title
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimeListResponse"
+
+  /anime/{id}:
+    get:
+      operationId: getAnimeInfo
+      tags: [anime]
+      summary: Get anime details and episode list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Anime info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnimeInfo"
+        "404":
+          description: Not found
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    AnimeResult:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        image:
+          type: ["string", "null"]
+        releaseDate:
+          type: ["string", "null"]
+        type:
+          type: ["string", "null"]
+        totalEpisodes:
+          type: ["integer", "null"]
+
+    AnimeListResponse:
+      type: object
+      required: [currentPage, hasNextPage, results]
+      properties:
+        currentPage:
+          type: integer
+        hasNextPage:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnimeResult"
+
+    Episode:
+      type: object
+      required: [number]
+      properties:
+        number:
+          type: integer
+        title:
+          type: ["string", "null"]
+        aired:
+          type: ["string", "null"]
+
+    AnimeInfo:
+      type: object
+      required: [id, title]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        image:
+          type: ["string", "null"]
+        description:
+          type: ["string", "null"]
+        releaseDate:
+          type: ["string", "null"]
+        status:
+          type: ["string", "null"]
+        genres:
+          type: array
+          items:
+            type: string
+        type:
+          type: ["string", "null"]
+        totalEpisodes:
+          type: ["integer", "null"]
+        episodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Episode"

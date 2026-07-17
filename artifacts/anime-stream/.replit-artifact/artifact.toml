@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Anime Stream"
+version = "1.0.0"
+id = "artifacts/anime-stream"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26167
+
+[services.development]
+run = "pnpm --filter @workspace/anime-stream run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/anime-stream", "run", "build" ]
+publicDir = "artifacts/anime-stream/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26167"
+BASE_PATH = "/"
