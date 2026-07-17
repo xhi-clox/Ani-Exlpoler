@@ -1,0 +1,7 @@
+{
+  "outputDirectory": "artifacts/anime-stream/dist/public",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

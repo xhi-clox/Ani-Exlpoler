@@ -4,6 +4,7 @@ import { StreamingLinks } from "./StreamingLinks";
 import { getSources } from "../api/sources";
 import { markWatched, unwatch } from "../api/watch";
 import { useAuth } from "../hooks/useAuth";
+import { apiRequest } from "../api/client";
 import type { StreamingSource, WatchProgress } from "../types";
 
 interface JikanEpisode {
@@ -48,8 +49,10 @@ export function EpisodeGrid({ animeId, totalEpisodes, progress, onProgressUpdate
     }
     if (totalEpisodes === null) {
       setLoadingEpisodes(true);
-      fetch(`/api/anime/${animeId}/episodes?page=1`)
-        .then((r) => r.json())
+      apiRequest<{
+        episodes?: JikanEpisode[];
+        pagination?: { lastPage: number };
+      }>(`/anime/${animeId}/episodes?page=1`)
         .then((data) => {
           if (data.episodes?.length) {
             setEpisodes(data.episodes.map((ep: JikanEpisode) => ({
@@ -57,7 +60,7 @@ export function EpisodeGrid({ animeId, totalEpisodes, progress, onProgressUpdate
               title: ep.title,
               aired: ep.aired,
             })));
-            setEpisodeCount(data.pagination?.lastPage * PAGE_SIZE || data.episodes.length);
+            setEpisodeCount((data.pagination?.lastPage ?? 0) * PAGE_SIZE || data.episodes.length);
           }
         })
         .catch(() => {})
