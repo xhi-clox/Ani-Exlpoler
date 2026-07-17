@@ -86,7 +86,7 @@ export function AnalysisCard({ analysis, showAuthorActions = true }: AnalysisCar
       {/* Header - Author Info */}
       {analysis.author && (
         <div className="flex items-center gap-3 px-4 py-3 border-b border-[#232A38]">
-          <Link href={`/users/${analysis.author.username}`} onClick={(e) => e.stopPropagation()}>
+          <Link href={`/users/${analysis.author.username}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
             <Avatar className="h-8 w-8">
               {analysis.author.avatarUrl ? (
                 <img src={analysis.author.avatarUrl} alt={analysis.author.username} className="object-cover" />
@@ -101,7 +101,7 @@ export function AnalysisCard({ analysis, showAuthorActions = true }: AnalysisCar
             <div className="flex items-center gap-2">
               <Link
                 href={`/users/${analysis.author.username}`}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 className="text-sm font-semibold text-[#EEF1F7] hover:text-[#4CD3F0] transition-colors truncate"
               >
                 {analysis.author.username}
