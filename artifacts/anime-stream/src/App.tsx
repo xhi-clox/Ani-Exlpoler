@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout/layout";
 import { AuthProvider } from "@/hooks/AuthContext";
+import { setBaseUrl } from "@workspace/api-client-react";
 import NotFound from "@/pages/not-found";
 import Search from "@/pages/search";
 import AnimeInfo from "@/pages/anime-info";
@@ -15,6 +16,9 @@ import WriteAnalysis from "@/pages/WriteAnalysis";
 import UserProfile from "@/pages/UserProfile";
 import SettingsPage from "@/pages/SettingsPage";
 import WatchHistory from "@/pages/WatchHistory";
+
+const apiUrl = import.meta.env.VITE_API_SERVER_URL;
+if (apiUrl) setBaseUrl(apiUrl);
 
 const queryClient = new QueryClient({
   defaultOptions: {
