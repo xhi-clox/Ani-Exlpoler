@@ -10,10 +10,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <footer className="mt-auto border-t border-border/80 bg-card/70 py-8 backdrop-blur-sm">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p className="mb-2 font-display text-lg font-semibold uppercase tracking-[0.18em] text-foreground">
-            AniExplorer
+            Analithe
           </p>
           <p className="mx-auto max-w-xl">
-            © {new Date().getFullYear()} AniExplorer. Discover your next favorite anime without sacrificing readability on any screen.
+            © {new Date().getFullYear()} Analithe. Discover your next favorite anime without sacrificing readability on any screen.
           </p>
         </div>
       </footer>

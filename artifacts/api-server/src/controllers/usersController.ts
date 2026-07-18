@@ -73,7 +73,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
 
     // Get top analyses with author, content, and userUpvoted
     const topAnalyses = await query(
-      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url
+      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url,
+        (SELECT COUNT(*) FROM comments WHERE analysis_id = a.id) AS comment_count
        FROM analyses a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1 ORDER BY a.upvote_count DESC LIMIT 5`,
       [user.id]
     );
@@ -108,7 +109,8 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
 
     // Get recent analyses with author, content, and userUpvoted
     const recentAnalyses = await query(
-      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url
+      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url,
+        (SELECT COUNT(*) FROM comments WHERE analysis_id = a.id) AS comment_count
        FROM analyses a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT 10`,
       [user.id]
     );
@@ -163,6 +165,7 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
         animeId: a.anime_id,
         upvoteCount: Number(a.upvote_count),
         viewCount: Number(a.view_count),
+        commentCount: Number(a.comment_count),
         createdAt: a.created_at,
         analysisType: a.analysis_type,
         content: a.content,
@@ -178,6 +181,7 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
         animeId: a.anime_id,
         upvoteCount: Number(a.upvote_count),
         viewCount: Number(a.view_count),
+        commentCount: Number(a.comment_count),
         createdAt: a.created_at,
         analysisType: a.analysis_type,
         content: a.content,
@@ -198,7 +202,7 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
   try {
     const username = req.params.username as string;
     const requestingUser = req.user!;
-    const { bio, pronouns, avatar_url } = req.body;
+    const { bio, pronouns, avatar_url, username: newUsername } = req.body;
 
     const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
     if (userResult.rows.length === 0) {
@@ -208,6 +212,23 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     if (userResult.rows[0].id !== requestingUser.userId) {
       res.status(403).json({ error: "Not authorized to update this profile" });
       return;
+    }
+
+    if (newUsername !== undefined) {
+      const clean = String(newUsername).trim().slice(0, 30);
+      if (clean.length < 2) {
+        res.status(400).json({ error: "Username must be at least 2 characters" });
+        return;
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(clean)) {
+        res.status(400).json({ error: "Username can only contain letters, numbers, hyphens, and underscores" });
+        return;
+      }
+      const existing = await query("SELECT id FROM users WHERE username = $1 AND id != $2", [clean, requestingUser.userId]);
+      if (existing.rows.length > 0) {
+        res.status(409).json({ error: "Username already taken" });
+        return;
+      }
     }
 
     const updates: string[] = [];
@@ -226,6 +247,10 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       updates.push(`avatar_url = $${idx++}`);
       params.push(avatar_url);
     }
+    if (newUsername !== undefined) {
+      updates.push(`username = $${idx++}`);
+      params.push(String(newUsername).trim().slice(0, 30));
+    }
 
     if (updates.length === 0) {
       res.status(400).json({ error: "No fields to update" });
@@ -240,9 +265,10 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       params
     );
 
+    const lookupUsername = newUsername !== undefined ? String(newUsername).trim().slice(0, 30) : username;
     const updated = await query(
       "SELECT id, username, bio, pronouns, avatar_url FROM users WHERE username = $1",
-      [username]
+      [lookupUsername]
     );
 
     res.json(updated.rows[0]);
@@ -397,7 +423,8 @@ export async function getUserAnalyses(req: Request, res: Response): Promise<void
     const total = parseInt(countResult.rows[0].count);
 
     const result = await query(
-      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url
+      `SELECT a.id, a.title, a.anime_id, a.upvote_count, a.view_count, a.created_at, a.analysis_type, a.content, u.username AS author_username, u.avatar_url AS author_avatar_url,
+        (SELECT COUNT(*) FROM comments WHERE analysis_id = a.id) AS comment_count
        FROM analyses a JOIN users u ON a.user_id = u.id WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
     );
@@ -426,6 +453,7 @@ export async function getUserAnalyses(req: Request, res: Response): Promise<void
         animeId: a.anime_id,
         upvoteCount: Number(a.upvote_count),
         viewCount: Number(a.view_count),
+        commentCount: Number(a.comment_count),
         createdAt: a.created_at,
         analysisType: a.analysis_type,
         content: a.content,

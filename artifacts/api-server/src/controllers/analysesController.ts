@@ -18,6 +18,7 @@ function formatAnalysis(row: Record<string, unknown>) {
     updatedAt: row.updated_at,
     viewCount: Number(row.view_count),
     upvoteCount: Number(row.upvote_count),
+    commentCount: Number(row.comment_count),
     author: row.author_username ? {
       username: row.author_username,
       avatarUrl: row.author_avatar_url,
@@ -71,7 +72,8 @@ export async function listAnalyses(req: Request, res: Response): Promise<void> {
     const total = parseInt(countResult.rows[0].count);
 
     const result = await query(
-      `SELECT a.*, u.username AS author_username, u.avatar_url AS author_avatar_url
+      `SELECT a.*, u.username AS author_username, u.avatar_url AS author_avatar_url,
+        (SELECT COUNT(*) FROM comments WHERE analysis_id = a.id) AS comment_count
        FROM analyses a
        JOIN users u ON u.id = a.user_id
        WHERE 1=1${where}
@@ -116,7 +118,8 @@ export async function getAnalysis(req: Request, res: Response): Promise<void> {
     await query("UPDATE analyses SET view_count = view_count + 1 WHERE id = $1", [id]);
 
     const result = await query(
-      `SELECT a.*, u.username AS author_username, u.avatar_url AS author_avatar_url
+      `SELECT a.*, u.username AS author_username, u.avatar_url AS author_avatar_url,
+        (SELECT COUNT(*) FROM comments WHERE analysis_id = a.id) AS comment_count
        FROM analyses a
        JOIN users u ON u.id = a.user_id
        WHERE a.id = $1`,

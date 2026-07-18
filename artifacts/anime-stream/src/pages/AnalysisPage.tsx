@@ -16,7 +16,7 @@ import type { AnimeInfo } from "../api/anime";
 
 function AnalysisSkeleton() {
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 overflow-x-hidden">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="h-5 w-24" />
       <Skeleton className="h-10 w-3/4" />
@@ -52,11 +52,23 @@ function CommentSkeleton() {
 function ReplyItem({
   reply,
   user,
+  replyTo,
+  replyText,
+  setReplyTo,
+  setReplyText,
+  submitting,
+  handleReply,
   onUpvote,
   onRemoveUpvote,
 }: {
   reply: CommentEntry;
   user: ReturnType<typeof useAuth>["user"];
+  replyTo: string | null;
+  replyText: string;
+  setReplyTo: (id: string | null) => void;
+  setReplyText: (text: string) => void;
+  submitting: boolean;
+  handleReply: (parentId: string) => void;
   onUpvote: (id: string) => Promise<{ upvoteCount: number }>;
   onRemoveUpvote: (id: string) => Promise<{ upvoteCount: number }>;
 }) {
@@ -88,36 +100,72 @@ function ReplyItem({
   };
 
   return (
-    <div className="flex gap-3">
-      <Avatar className="w-7 h-7">
-        <AvatarFallback className="text-[10px] bg-secondary">
-          {reply.author.username[0].toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <Link
-            href={`/users/${reply.author.username}`}
-            className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-          >
-            {reply.author.username}
-          </Link>
-          <span className="text-xs text-muted-foreground">
-            {formatDate(reply.createdAt)}
-          </span>
+    <div>
+      <div className="flex gap-3 max-w-full">
+        <Avatar className="w-7 h-7 shrink-0">
+          <AvatarFallback className="text-[10px] bg-secondary">
+            {reply.author.username[0].toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-0.5">
+            <Link
+              href={`/users/${reply.author.username}`}
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
+              {reply.author.username}
+            </Link>
+            <span className="text-xs text-muted-foreground">
+              {formatDate(reply.createdAt)}
+            </span>
+          </div>
+          <p className="text-sm text-foreground leading-relaxed break-words" style={{ whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
+            {reply.content}
+          </p>
+          <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+            <button
+              onClick={handleUpvoteToggle}
+              disabled={!user || upvoting}
+              className={`inline-flex items-center gap-1 hover:text-primary transition-colors ${userUpvoted ? "text-primary" : ""}`}
+            >
+              <ArrowUp className={`w-3 h-3 ${userUpvoted ? "" : "text-muted-foreground"}`} />
+              {upvoteCount}
+            </button>
+            {user && (
+              <button
+                onClick={() => setReplyTo(replyTo === reply.id ? null : reply.id)}
+                className="hover:text-primary transition-colors"
+              >
+                {replyTo === reply.id ? "Cancel" : "Reply"}
+              </button>
+            )}
+          </div>
         </div>
-        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-          {reply.content}
-        </p>
-        <button
-          onClick={handleUpvoteToggle}
-          disabled={!user || upvoting}
-          className={`inline-flex items-center gap-1 mt-1 text-xs text-muted-foreground hover:text-primary transition-colors ${userUpvoted ? "text-primary" : ""}`}
-        >
-          <ArrowUp className={`w-3 h-3 ${userUpvoted ? "" : "text-muted-foreground"}`} />
-          {upvoteCount}
-        </button>
       </div>
+      {replyTo === reply.id && user && (
+        <div className="ml-11 mt-3 space-y-2 max-w-full">
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            rows={2}
+            placeholder="Write a reply..."
+            className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground resize-none outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={() => handleReply(reply.id)}
+              disabled={submitting || !replyText.trim()}
+            >
+              {submitting ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "Reply"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -173,15 +221,15 @@ function CommentItem({
   };
 
   return (
-    <div>
+    <div className="max-w-full">
       <div className="flex gap-3">
-        <Avatar className="w-8 h-8">
+        <Avatar className="w-8 h-8 shrink-0">
           <AvatarFallback className="text-xs bg-secondary">
             {comment.author.username[0].toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1">
             <Link
               href={`/users/${comment.author.username}`}
               className="text-sm font-medium text-foreground hover:text-primary transition-colors"
@@ -192,7 +240,7 @@ function CommentItem({
               {formatDate(comment.createdAt)}
             </span>
           </div>
-          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+          <p className="text-sm text-foreground leading-relaxed break-words" style={{ whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
             {comment.content}
           </p>
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -217,7 +265,7 @@ function CommentItem({
       </div>
 
       {replyTo === comment.id && user && (
-        <div className="ml-11 mt-3 space-y-2">
+        <div className="ml-11 mt-3 space-y-2 max-w-full">
           <textarea
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
@@ -229,7 +277,7 @@ function CommentItem({
             <Button
               size="sm"
               onClick={() => handleReply(comment.id)}
-              disabled={submitting || replyText.length < 10}
+              disabled={submitting || !replyText.trim()}
             >
               {submitting ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -242,9 +290,9 @@ function CommentItem({
       )}
 
       {comment.replies.length > 0 && (
-        <div className="ml-4 sm:ml-11 mt-3 space-y-3 border-l-2 border-border pl-3 sm:pl-4">
+        <div className="ml-4 sm:ml-11 mt-3 space-y-3 border-l-2 border-border pl-3 sm:pl-4 max-w-full">
           {comment.replies.map((reply) => (
-            <ReplyItem key={reply.id} reply={reply} user={user} onUpvote={onUpvote} onRemoveUpvote={onRemoveUpvote} />
+            <ReplyItem key={reply.id} reply={reply} user={user} replyTo={replyTo} replyText={replyText} setReplyTo={setReplyTo} setReplyText={setReplyText} submitting={submitting} handleReply={handleReply} onUpvote={onUpvote} onRemoveUpvote={onRemoveUpvote} />
           ))}
         </div>
       )}
@@ -305,7 +353,7 @@ export default function AnalysisPage() {
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !user || commentText.length < 10) return;
+    if (!id || !user || !commentText.trim()) return;
     setSubmitting(true);
     try {
       await createComment(id, commentText);
@@ -319,7 +367,7 @@ export default function AnalysisPage() {
   };
 
   const handleReply = async (parentId: string) => {
-    if (!id || !user || replyText.length < 10) return;
+    if (!id || !user || !replyText.trim()) return;
     setSubmitting(true);
     try {
       await createComment(id, replyText, parentId);
@@ -353,23 +401,24 @@ export default function AnalysisPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:py-8">
-      <button
-        onClick={() => window.history.back()}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mb-4"
-      >
-        <ChevronLeft className="w-4 h-4" />
-        Go back
-      </button>
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => window.history.back()}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Go back
+        </button>
+        <Badge variant="secondary" className="px-3 py-1 text-xs font-medium tracking-wide uppercase rounded-full">
+          {ANALYSIS_TYPE_LABELS[analysis.analysisType] || analysis.analysisType}
+        </Badge>
+      </div>
 
-      <Badge variant="secondary" className="mb-3">
-        {ANALYSIS_TYPE_LABELS[analysis.analysisType] || analysis.analysisType}
-      </Badge>
-
-      <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight leading-tight mb-4">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight leading-tight mb-4 break-words">
         {analysis.title}
       </h1>
 
-      <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-6 text-sm text-muted-foreground">
         {analysis.author && (
           <Link
             href={`/users/${analysis.author.username}`}
@@ -390,7 +439,7 @@ export default function AnalysisPage() {
       {anime && (
         <Link
           href={`/anime/${analysis.animeId}`}
-          className="flex items-center gap-3 mb-6 p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors"
+          className="flex items-center gap-3 mb-6 p-3 rounded-lg border border-border bg-card hover:bg-accent transition-colors max-w-full"
         >
           {anime.image && (
             <img
@@ -433,8 +482,10 @@ export default function AnalysisPage() {
 
       <Separator className="mb-8" />
 
-      <div className="prose prose-sm mb-12 max-w-none whitespace-pre-wrap break-words text-foreground prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-pre:overflow-x-auto prose-pre:bg-card prose-pre:border prose-pre:border-border prose-table:block prose-table:overflow-x-auto leading-relaxed">
+      <div className="prose prose-sm mb-12 max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary prose-code:text-foreground prose-pre:overflow-x-auto prose-pre:whitespace-pre-wrap prose-pre:bg-card prose-pre:border prose-pre:border-border prose-table:block prose-table:overflow-x-auto leading-relaxed break-words">
+        <div className="text-foreground px-2 sm:px-0" style={{ whiteSpace: "pre-wrap", overflowWrap: "break-word", wordBreak: "break-word" }}>
         {analysis.content}
+        </div>
       </div>
 
       <Separator className="mb-8" />
@@ -448,26 +499,24 @@ export default function AnalysisPage() {
         {user && (
           <form onSubmit={handleComment} className="mb-8">
             <div className="flex gap-3">
-              <Avatar className="w-8 h-8 mt-1">
+              <Avatar className="w-8 h-8 mt-1 shrink-0">
                 <AvatarFallback className="text-xs bg-secondary">
                   {user.username[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 space-y-2">
+                <div className="flex-1 min-w-0 space-y-2">
                 <textarea
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   rows={3}
-                  placeholder="Share your thoughts (min 10 characters)..."
+                  placeholder="Share your thoughts..."
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-card text-foreground placeholder:text-muted-foreground resize-none outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-xs text-muted-foreground">
-                    {commentText.length < 10
-                      ? `${10 - commentText.length} more characters needed`
-                      : "Ready to post"}
+                  <span className="text-xs text-muted-foreground break-words">
+                    {commentText ? `${commentText.length} characters` : ""}
                   </span>
-                  <Button type="submit" size="sm" className="self-start sm:self-auto" disabled={submitting || commentText.length < 10}>
+                  <Button type="submit" size="sm" className="w-full sm:w-auto self-start sm:self-auto" disabled={submitting || commentText.length === 0}>
                     {submitting ? (
                       <>
                         <Loader2 className="w-3 h-3 animate-spin" />

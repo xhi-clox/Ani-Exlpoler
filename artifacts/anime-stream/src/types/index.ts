@@ -24,6 +24,7 @@ export interface Analysis {
   updatedAt: string;
   viewCount: number;
   upvoteCount: number;
+  commentCount: number;
   author?: {
     username: string;
     avatarUrl: string;

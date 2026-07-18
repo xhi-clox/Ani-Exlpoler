@@ -16,7 +16,7 @@ import {
 
 const router = Router();
 
-router.get("/", listAnalyses);
+router.get("/", optionalAuth, listAnalyses);
 router.get("/:id", optionalAuth, getAnalysis);
 router.post("/", requireAuth, createAnalysis);
 router.patch("/:id", requireAuth, updateAnalysis);

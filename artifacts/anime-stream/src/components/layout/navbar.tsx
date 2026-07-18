@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
-import { Search, Sparkles, PenLine, BookOpen, Clock, LogOut, Menu } from "lucide-react";
+import { Search, Sparkles, BookOpen, LogOut, Menu, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -30,7 +31,7 @@ export function Navbar() {
             <Sparkles className="w-5 h-5" />
           </div>
           <span className="hidden font-display text-xl font-bold uppercase tracking-[0.14em] text-foreground sm:inline">
-            AniExplorer
+            Analithe
           </span>
         </Link>
 
@@ -41,14 +42,6 @@ export function Navbar() {
               Analyses
             </Button>
           </Link>
-          {isAuthenticated && (
-            <Link href="/write">
-              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
-                <PenLine className="w-4 h-4" />
-                Write
-              </Button>
-            </Link>
-          )}
         </div>
 
         <div className="hidden max-w-md flex-1 md:block">
@@ -80,9 +73,13 @@ export function Navbar() {
                 {isAuthenticated && (
                   <Link href={user ? `/users/${user.username}` : "/settings"} onClick={closeMenu}>
                     <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl border border-transparent text-base text-foreground hover:border-primary/30 hover:bg-secondary/70" size="lg">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-primary/90 text-sm font-medium text-primary-foreground">
-                        {user?.username?.[0].toUpperCase()}
-                      </span>
+                      {user?.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full border border-primary/40 object-cover" />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/40 bg-primary/90 text-sm font-medium text-primary-foreground">
+                          {user?.username?.[0].toUpperCase()}
+                        </span>
+                      )}
                       {user?.username ?? "Profile"}
                     </Button>
                   </Link>
@@ -95,16 +92,10 @@ export function Navbar() {
                 </Link>
                 {isAuthenticated && (
                   <>
-                    <Link href="/write" onClick={closeMenu}>
+                    <Link href="/settings" onClick={closeMenu}>
                       <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl border border-transparent text-base text-foreground hover:border-primary/30 hover:bg-secondary/70" size="lg">
-                        <PenLine className="w-5 h-5" />
-                        Write
-                      </Button>
-                    </Link>
-                    <Link href="/watch-history" onClick={closeMenu}>
-                      <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl border border-transparent text-base text-foreground hover:border-primary/30 hover:bg-secondary/70" size="lg">
-                        <Clock className="w-5 h-5" />
-                        History
+                        <Settings className="w-5 h-5" />
+                        Settings
                       </Button>
                     </Link>
                     <Button
@@ -134,21 +125,34 @@ export function Navbar() {
 
           {isAuthenticated ? (
             <>
-              <Link href="/watch-history">
-                <Button variant="ghost" size="sm" className="hidden gap-1 text-muted-foreground hover:text-foreground md:inline-flex">
-                  <Clock className="w-4 h-4" />
-                  <span>History</span>
-                </Button>
-              </Link>
-              <Link href={user ? `/users/${user.username}` : "/settings"}>
-                <Button variant="ghost" size="sm" className="hidden text-muted-foreground hover:text-foreground md:inline-flex">
-                  {user?.username ?? "Profile"}
-                </Button>
-              </Link>
-              <Button variant="ghost" size="sm" className="hidden gap-1 text-muted-foreground hover:text-destructive md:inline-flex" onClick={() => { logout(); setLocation("/"); }}>
-                <LogOut className="w-4 h-4" />
-                <span>Log out</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="hidden gap-2 text-muted-foreground hover:text-foreground md:inline-flex">
+                    {user?.avatarUrl ? (
+                      <img src={user.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/90 text-xs font-medium text-primary-foreground">
+                        {user?.username?.[0].toUpperCase()}
+                      </span>
+                    )}
+                    {user?.username ?? "Profile"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem onClick={() => setLocation(user ? `/users/${user.username}` : "/settings")}>
+                    <Sparkles className="w-4 h-4" />
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation("/settings")}>
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { logout(); setLocation("/"); }}>
+                    <LogOut className="w-4 h-4" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : (
             <>

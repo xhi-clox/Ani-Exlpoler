@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowUp, MessageSquare, User, Plus, Check } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -73,10 +73,20 @@ export function AnalysisCard({ analysis, showAuthorActions = true }: AnalysisCar
     setLocation(`/analyses/${analysis.id}`);
   };
 
-  const contentPreview =
-    analysis.content && analysis.content.length > 300
-      ? analysis.content.slice(0, 300) + "..."
-      : analysis.content;
+  const contentRef = useRef<HTMLParagraphElement>(null);
+  const [clamped, setClamped] = useState(true);
+  const [needsClamp, setNeedsClamp] = useState(false);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setNeedsClamp(contentRef.current.scrollHeight > contentRef.current.clientHeight);
+    }
+  }, []);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setClamped(!clamped);
+  };
 
   return (
     <div
@@ -138,10 +148,23 @@ export function AnalysisCard({ analysis, showAuthorActions = true }: AnalysisCar
         </h3>
 
         {/* Content Preview */}
-        {contentPreview && (
-          <p className="text-sm text-[#8A93A8] leading-relaxed mb-4 whitespace-pre-wrap">
-            {contentPreview}
-          </p>
+        {analysis.content && (
+          <div className="mb-4">
+            <p
+              ref={contentRef}
+              className={`text-sm text-[#8A93A8] leading-relaxed whitespace-pre-wrap ${clamped ? "line-clamp-7" : ""}`}
+            >
+              {analysis.content}
+            </p>
+            {needsClamp && (
+              <button
+                onClick={handleToggle}
+                className="text-xs text-[#4CD3F0] hover:text-[#6BDDF8] mt-1 transition-colors"
+              >
+                {clamped ? "Show more" : "Show less"}
+              </button>
+            )}
+          </div>
         )}
 
         {/* Footer Actions */}
@@ -163,24 +186,13 @@ export function AnalysisCard({ analysis, showAuthorActions = true }: AnalysisCar
               className="flex items-center gap-1.5 text-xs font-semibold text-[#8A93A8] hover:text-[#4CD3F0] transition-colors"
             >
               <MessageSquare className="h-4 w-4" />
-              <span>Comments</span>
+              <span>{analysis.commentCount ?? 0}</span>
             </button>
 
             <span className="text-xs text-[#8A93A8]">
               {pluralize(analysis.viewCount, "view")}
             </span>
           </div>
-
-          {analysis.content && analysis.content.length > 300 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleReadMore}
-              className="text-xs text-[#4CD3F0] hover:text-[#6BDDF8] hover:bg-[#161B25] px-2 h-7"
-            >
-              Read more
-            </Button>
-          )}
         </div>
       </div>
     </div>

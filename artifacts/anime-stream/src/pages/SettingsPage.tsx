@@ -143,7 +143,8 @@ function TopListEditor<T>({
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [pronouns, setPronouns] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -157,6 +158,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
+      setUsername(user.username || "");
       setBio(user.bio || "");
       setPronouns(user.pronouns || "");
       setAvatarUrl(user.avatarUrl || "");
@@ -177,7 +179,8 @@ export default function SettingsPage() {
     setMessage("");
     setError("");
     try {
-      await updateProfile(user.username, { bio, pronouns, avatar_url: avatarUrl });
+      const data = await updateProfile(user.username, { username, bio, pronouns, avatar_url: avatarUrl });
+      updateUser({ username: data.username, bio: data.bio, pronouns: data.pronouns, avatarUrl: data.avatar_url });
       setMessage("Saved!");
     } catch (err: any) {
       setError(err?.message || "Failed to save profile");
@@ -221,6 +224,12 @@ export default function SettingsPage() {
         <section className="rounded-[22px] border border-border/80 bg-card/85 p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] sm:p-6">
           <h2 className="mb-4 font-display text-lg font-semibold uppercase tracking-[0.08em] text-card-foreground">Profile</h2>
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-card-foreground mb-1">Username</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={30}
+                className="w-full px-3 py-2 rounded-xl bg-secondary border-0 text-foreground text-sm placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="Your username" />
+            </div>
             <div>
               <label className="block text-sm font-medium text-card-foreground mb-1">Bio</label>
               <textarea value={bio} onChange={(e) => setBio(e.target.value)} maxLength={500} rows={3}

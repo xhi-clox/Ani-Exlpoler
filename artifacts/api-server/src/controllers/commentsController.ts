@@ -7,8 +7,8 @@ export async function createComment(req: Request, res: Response): Promise<void> 
     const { content, parent_comment_id } = req.body;
     const userId = req.user!.userId;
 
-    if (!content || content.length < 10 || content.length > 2000) {
-      res.status(400).json({ error: "Comment must be between 10 and 2,000 characters" });
+    if (!content || content.length > 2000) {
+      res.status(400).json({ error: "Comment must be between 1 and 2,000 characters" });
       return;
     }
 
@@ -125,8 +125,8 @@ export async function updateComment(req: Request, res: Response): Promise<void> 
     const userId = req.user!.userId;
     const { content } = req.body;
 
-    if (!content || content.length < 10 || content.length > 2000) {
-      res.status(400).json({ error: "Comment must be between 10 and 2,000 characters" });
+    if (!content || content.length > 2000) {
+      res.status(400).json({ error: "Comment must be between 1 and 2,000 characters" });
       return;
     }
 

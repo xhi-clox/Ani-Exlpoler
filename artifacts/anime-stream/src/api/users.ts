@@ -5,7 +5,7 @@ export function getProfile(username: string): Promise<UserProfile> {
   return apiRequest(`/users/${encodeURIComponent(username)}`);
 }
 
-export function updateProfile(username: string, data: { bio?: string; pronouns?: string; avatar_url?: string }): Promise<void> {
+export function updateProfile(username: string, data: { bio?: string; pronouns?: string; avatar_url?: string; username?: string }): Promise<{ id: string; username: string; bio: string; pronouns: string; avatar_url: string }> {
   return apiRequest(`/users/${encodeURIComponent(username)}`, {
     method: "PATCH",
     body: JSON.stringify(data),
