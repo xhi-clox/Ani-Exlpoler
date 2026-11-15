@@ -1,12 +1,146 @@
 import { Request, Response } from "express";
 import { query } from "../db/pool";
 
+const WORK_TYPES = new Set(["ANIME", "MANGA", "MANHWA", "NOVEL", "MOVIE"]);
+const CURRENTLY_INTO_ICONS = new Set(["book", "headphones", "screen", "bookmark"]);
+
+function text(value: unknown, max = 500): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function jsonArray(value: unknown, max = 40): unknown[] {
+  return Array.isArray(value) ? value.slice(0, max) : [];
+}
+
+function cleanInterests(value: unknown) {
+  return jsonArray(value, 20)
+    .map((entry) => {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      return { emoji: text(item.emoji, 8), label: text(item.label, 60) };
+    })
+    .filter((item) => item.label);
+}
+
+function cleanTasteDna(value: unknown) {
+  return jsonArray(value, 12)
+    .map((entry) => {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      const raw = Number(item.value);
+      return {
+        label: text(item.label, 60),
+        value: Number.isFinite(raw) ? Math.min(Math.max(Math.round(raw), 0), 100) : 0,
+      };
+    })
+    .filter((item) => item.label);
+}
+
+function cleanCurrentlyInto(value: unknown) {
+  return jsonArray(value, 8)
+    .map((entry) => {
+      const item = (entry ?? {}) as Record<string, unknown>;
+      const icon = text(item.icon, 20);
+      return {
+        icon: CURRENTLY_INTO_ICONS.has(icon) ? icon : "book",
+        title: text(item.title, 120),
+        meta: text(item.meta, 120),
+      };
+    })
+    .filter((item) => item.title);
+}
+
+function cleanPinnedWork(value: unknown) {
+  const item = (value ?? {}) as Record<string, unknown>;
+  return {
+    label: text(item.label, 120),
+    meta: text(item.meta, 160),
+    title: text(item.title, 200),
+    quote: text(item.quote, 500),
+    rating: text(item.rating, 20),
+    stats: jsonArray(item.stats, 6).map((stat) => text(stat, 80)).filter(Boolean),
+    image: text(item.image, 500_000),
+  };
+}
+
+function cleanPinnedQuote(value: unknown) {
+  const item = (value ?? {}) as Record<string, unknown>;
+  return {
+    label: text(item.label, 120),
+    text: text(item.text, 500),
+    attribution: text(item.attribution, 200),
+  };
+}
+
+function serializeFavorite(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    animeId: row.anime_id ?? null,
+    title: row.title,
+    type: row.work_type,
+    meta: row.meta ?? "",
+    rating: row.rating ?? "",
+    imageUrl: row.image_url ?? "",
+    rank: row.rank,
+  };
+}
+
+function serializeQuote(row: Record<string, unknown>) {
+  return {
+    id: row.id,
+    text: row.text,
+    attribution: row.attribution ?? "",
+    source: row.source ?? "",
+    favorite: Boolean(row.is_favorite),
+    original: Boolean(row.is_original),
+    rank: row.rank,
+  };
+}
+
+async function collectionsFor(userId: string, viewerId?: string) {
+  const collections = await query(
+    `SELECT c.id, c.title, c.description, c.created_at,
+        (SELECT COUNT(*)::int FROM collection_likes l WHERE l.collection_id = c.id) AS like_count,
+        EXISTS (SELECT 1 FROM collection_likes l WHERE l.collection_id = c.id AND l.user_id = $2) AS liked_by_me
+     FROM collections c WHERE c.user_id = $1 ORDER BY c.created_at DESC`,
+    [userId, viewerId ?? "00000000-0000-0000-0000-000000000000"]
+  );
+
+  return Promise.all(
+    collections.rows.map(async (c: Record<string, unknown>) => {
+      const items = await query(
+        "SELECT id, anime_id, title, image_url, rank FROM collection_items WHERE collection_id = $1 ORDER BY rank ASC",
+        [c.id]
+      );
+      return {
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        createdAt: c.created_at,
+        itemCount: items.rows.length,
+        likeCount: Number(c.like_count),
+        likedByMe: Boolean(c.liked_by_me),
+        items: items.rows.map((item: Record<string, unknown>) => ({
+          id: item.id,
+          animeId: item.anime_id,
+          title: item.title,
+          imageUrl: item.image_url ?? "",
+          rank: item.rank,
+        })),
+      };
+    })
+  );
+}
+
 export async function getProfile(req: Request, res: Response): Promise<void> {
   try {
     const username = req.params.username as string;
 
     const userResult = await query(
-      `SELECT id, username, bio, pronouns, avatar_url, profile_view_count, created_at FROM users WHERE username = $1`,
+      `SELECT id, username, display_name, bio, pronouns, avatar_url, banner_url, location, languages,
+              website_url, instagram, twitter, mal_username,
+              currently_reading_title, currently_reading_chapter, currently_exploring,
+              favorite_theme, profile_mood, interests, taste_dna, pinned_work, pinned_quote,
+              currently_into, traits, profile_view_count, created_at
+       FROM users WHERE username = $1`,
       [username]
     );
     if (userResult.rows.length === 0) {
@@ -55,21 +189,21 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     );
 
     const topCharacters = await query(
-      "SELECT character_id, name, image_url, anime_name, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
+      "SELECT character_id, name, image_url, anime_name, note, label, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
       [user.id]
     );
 
-    const collections = await query(
-      "SELECT id, title, description, created_at FROM collections WHERE user_id = $1 ORDER BY created_at DESC",
+    const favoriteWorks = await query(
+      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
       [user.id]
     );
 
-    const collectionsWithCount = await Promise.all(
-      collections.rows.map(async (c: Record<string, unknown>) => {
-        const cnt = await query("SELECT COUNT(*)::int AS count FROM collection_items WHERE collection_id = $1", [c.id]);
-        return { id: c.id, title: c.title, description: c.description, createdAt: c.created_at, itemCount: cnt.rows[0].count };
-      })
+    const profileQuotes = await query(
+      "SELECT id, text, attribution, source, is_favorite, is_original, rank FROM profile_quotes WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      [user.id]
     );
+
+    const collectionsWithCount = await collectionsFor(user.id, req.user?.userId);
 
     // Get top analyses with author, content, and userUpvoted
     const topAnalyses = await query(
@@ -132,9 +266,30 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     res.json({
       id: user.id,
       username: user.username,
+      displayName: user.display_name || user.username,
       bio: user.bio,
       pronouns: user.pronouns,
       avatarUrl: user.avatar_url,
+      bannerUrl: user.banner_url || "",
+      location: user.location || "",
+      languages: user.languages || "",
+      websiteUrl: user.website_url || "",
+      instagram: user.instagram || "",
+      twitter: user.twitter || "",
+      malUsername: user.mal_username || "",
+      currentlyReading: {
+        title: user.currently_reading_title || "",
+        chapter: user.currently_reading_chapter || "",
+      },
+      currentlyExploring: user.currently_exploring || "",
+      favoriteTheme: user.favorite_theme || "",
+      mood: user.profile_mood || "",
+      interests: cleanInterests(user.interests),
+      tasteDna: cleanTasteDna(user.taste_dna),
+      pinnedWork: cleanPinnedWork(user.pinned_work),
+      pinnedQuote: cleanPinnedQuote(user.pinned_quote),
+      currentlyInto: cleanCurrentlyInto(user.currently_into),
+      traits: jsonArray(user.traits, 10).map((trait) => text(trait, 60)).filter(Boolean),
       profileViewCount: Number(user.profile_view_count),
       createdAt: user.created_at,
       totalAnalyses: stats.rows[0].total_analyses,
@@ -156,8 +311,12 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
         name: c.name,
         imageUrl: c.image_url,
         animeName: c.anime_name,
+        note: c.note || "",
+        label: c.label || "",
         rank: c.rank,
       })),
+      favoriteWorks: favoriteWorks.rows.map(serializeFavorite),
+      quotes: profileQuotes.rows.map(serializeQuote),
       collections: collectionsWithCount,
       topAnalyses: topAnalyses.rows.map((a: Record<string, unknown>) => ({
         id: a.id,
@@ -202,7 +361,7 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
   try {
     const username = req.params.username as string;
     const requestingUser = req.user!;
-    const { bio, pronouns, avatar_url, username: newUsername } = req.body;
+    const body = req.body ?? {};
 
     const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
     if (userResult.rows.length === 0) {
@@ -214,8 +373,8 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (newUsername !== undefined) {
-      const clean = String(newUsername).trim().slice(0, 30);
+    if (body.username !== undefined) {
+      const clean = String(body.username).trim().slice(0, 30);
       if (clean.length < 2) {
         res.status(400).json({ error: "Username must be at least 2 characters" });
         return;
@@ -232,24 +391,41 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
     }
 
     const updates: string[] = [];
-    const params: (string | number)[] = [];
+    const params: unknown[] = [];
     let idx = 1;
 
-    if (bio !== undefined) {
-      updates.push(`bio = $${idx++}`);
-      params.push(String(bio).slice(0, 500));
-    }
-    if (pronouns !== undefined) {
-      updates.push(`pronouns = $${idx++}`);
-      params.push(String(pronouns).slice(0, 50));
-    }
-    if (avatar_url !== undefined) {
-      updates.push(`avatar_url = $${idx++}`);
-      params.push(avatar_url);
-    }
-    if (newUsername !== undefined) {
-      updates.push(`username = $${idx++}`);
-      params.push(String(newUsername).trim().slice(0, 30));
+    const set = (column: string, value: unknown) => {
+      updates.push(`${column} = $${idx++}`);
+      params.push(value);
+    };
+
+    if (body.bio !== undefined) set("bio", text(body.bio, 500));
+    if (body.pronouns !== undefined) set("pronouns", text(body.pronouns, 50));
+    if (body.avatar_url !== undefined) set("avatar_url", text(body.avatar_url, 2_000_000));
+    if (body.banner_url !== undefined) set("banner_url", text(body.banner_url, 4_000_000));
+    if (body.username !== undefined) set("username", String(body.username).trim().slice(0, 30));
+
+    if (body.display_name !== undefined) set("display_name", text(body.display_name, 80));
+    if (body.location !== undefined) set("location", text(body.location, 120));
+    if (body.languages !== undefined) set("languages", text(body.languages, 200));
+    if (body.website_url !== undefined) set("website_url", text(body.website_url, 500));
+    if (body.instagram !== undefined) set("instagram", text(body.instagram, 120));
+    if (body.twitter !== undefined) set("twitter", text(body.twitter, 120));
+    if (body.mal_username !== undefined) set("mal_username", text(body.mal_username, 120));
+
+    if (body.currently_reading_title !== undefined) set("currently_reading_title", text(body.currently_reading_title, 200));
+    if (body.currently_reading_chapter !== undefined) set("currently_reading_chapter", text(body.currently_reading_chapter, 80));
+    if (body.currently_exploring !== undefined) set("currently_exploring", text(body.currently_exploring, 500));
+    if (body.favorite_theme !== undefined) set("favorite_theme", text(body.favorite_theme, 120));
+    if (body.profile_mood !== undefined) set("profile_mood", text(body.profile_mood, 120));
+
+    if (body.interests !== undefined) set("interests", JSON.stringify(cleanInterests(body.interests)));
+    if (body.taste_dna !== undefined) set("taste_dna", JSON.stringify(cleanTasteDna(body.taste_dna)));
+    if (body.pinned_work !== undefined) set("pinned_work", JSON.stringify(cleanPinnedWork(body.pinned_work)));
+    if (body.pinned_quote !== undefined) set("pinned_quote", JSON.stringify(cleanPinnedQuote(body.pinned_quote)));
+    if (body.currently_into !== undefined) set("currently_into", JSON.stringify(cleanCurrentlyInto(body.currently_into)));
+    if (body.traits !== undefined) {
+      set("traits", JSON.stringify(jsonArray(body.traits, 10).map((trait) => text(trait, 60)).filter(Boolean)));
     }
 
     if (updates.length === 0) {
@@ -265,13 +441,47 @@ export async function updateProfile(req: Request, res: Response): Promise<void> 
       params
     );
 
-    const lookupUsername = newUsername !== undefined ? String(newUsername).trim().slice(0, 30) : username;
+    const lookupUsername = body.username !== undefined ? String(body.username).trim().slice(0, 30) : username;
     const updated = await query(
-      "SELECT id, username, bio, pronouns, avatar_url FROM users WHERE username = $1",
+      `SELECT id, username, display_name, bio, pronouns, avatar_url, banner_url, location, languages,
+              website_url, instagram, twitter, mal_username,
+              currently_reading_title, currently_reading_chapter, currently_exploring,
+              favorite_theme, profile_mood, interests, taste_dna, pinned_work, pinned_quote,
+              currently_into, traits
+       FROM users WHERE username = $1`,
       [lookupUsername]
     );
 
-    res.json(updated.rows[0]);
+    const row = updated.rows[0];
+    res.json({
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name || row.username,
+      bio: row.bio,
+      pronouns: row.pronouns,
+      avatarUrl: row.avatar_url,
+      avatar_url: row.avatar_url,
+      bannerUrl: row.banner_url || "",
+      location: row.location || "",
+      languages: row.languages || "",
+      websiteUrl: row.website_url || "",
+      instagram: row.instagram || "",
+      twitter: row.twitter || "",
+      malUsername: row.mal_username || "",
+      currentlyReading: {
+        title: row.currently_reading_title || "",
+        chapter: row.currently_reading_chapter || "",
+      },
+      currentlyExploring: row.currently_exploring || "",
+      favoriteTheme: row.favorite_theme || "",
+      mood: row.profile_mood || "",
+      interests: cleanInterests(row.interests),
+      tasteDna: cleanTasteDna(row.taste_dna),
+      pinnedWork: cleanPinnedWork(row.pinned_work),
+      pinnedQuote: cleanPinnedQuote(row.pinned_quote),
+      currentlyInto: cleanCurrentlyInto(row.currently_into),
+      traits: jsonArray(row.traits, 10).map((trait) => text(trait, 60)).filter(Boolean),
+    });
   } catch (err) {
     console.error("Update profile error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -479,7 +689,7 @@ export async function getTopCharacters(req: Request, res: Response): Promise<voi
       return;
     }
     const rows = await query(
-      "SELECT character_id, name, image_url, anime_name, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
+      "SELECT character_id, name, image_url, anime_name, note, label, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
       [userResult.rows[0].id]
     );
     res.json({ results: rows.rows.map((r: Record<string, unknown>) => ({
@@ -487,6 +697,8 @@ export async function getTopCharacters(req: Request, res: Response): Promise<voi
       name: r.name,
       imageUrl: r.image_url,
       animeName: r.anime_name,
+      note: r.note || "",
+      label: r.label || "",
       rank: r.rank,
     })) });
   } catch (err) {
@@ -523,13 +735,22 @@ export async function setTopCharacters(req: Request, res: Response): Promise<voi
       const item = items[i];
       if (!item.character_id || !item.name) continue;
       await query(
-        "INSERT INTO top_characters (user_id, character_id, name, image_url, anime_name, rank) VALUES ($1, $2, $3, $4, $5, $6)",
-        [userId, item.character_id, item.name, item.image_url || "", item.anime_name || "", i + 1]
+        "INSERT INTO top_characters (user_id, character_id, name, image_url, anime_name, note, label, rank) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        [
+          userId,
+          item.character_id,
+          text(item.name, 300),
+          text(item.image_url, 500),
+          text(item.anime_name, 500),
+          text(item.note, 500),
+          text(item.label, 80),
+          i + 1,
+        ]
       );
     }
 
     const rows = await query(
-      "SELECT character_id, name, image_url, anime_name, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
+      "SELECT character_id, name, image_url, anime_name, note, label, rank FROM top_characters WHERE user_id = $1 ORDER BY rank ASC",
       [userId]
     );
     res.json({ results: rows.rows.map((r: Record<string, unknown>) => ({
@@ -537,6 +758,8 @@ export async function setTopCharacters(req: Request, res: Response): Promise<voi
       name: r.name,
       imageUrl: r.image_url,
       animeName: r.anime_name,
+      note: r.note || "",
+      label: r.label || "",
       rank: r.rank,
     })) });
   } catch (err) {
@@ -628,6 +851,155 @@ export async function unfollowUser(req: Request, res: Response): Promise<void> {
     res.json({ message: "Unfollowed" });
   } catch (err) {
     console.error("Unfollow user error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function getFavoriteWorks(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const rows = await query(
+      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      [userResult.rows[0].id]
+    );
+    res.json({ results: rows.rows.map(serializeFavorite) });
+  } catch (err) {
+    console.error("Get favorite works error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function setFavoriteWorks(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length > 40) {
+      res.status(400).json({ error: "items must be an array of up to 40 entries" });
+      return;
+    }
+
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (userResult.rows[0].id !== req.user!.userId) {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+    const userId = userResult.rows[0].id;
+
+    await query("DELETE FROM favorite_works WHERE user_id = $1", [userId]);
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] ?? {};
+      const title = text(item.title, 500);
+      if (!title) continue;
+      const type = text(item.type, 20).toUpperCase();
+      await query(
+        `INSERT INTO favorite_works (user_id, anime_id, title, work_type, meta, rating, image_url, rank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          userId,
+          Number.isFinite(Number(item.anime_id)) && Number(item.anime_id) > 0 ? Number(item.anime_id) : null,
+          title,
+          WORK_TYPES.has(type) ? type : "ANIME",
+          text(item.meta, 300),
+          text(item.rating, 20),
+          text(item.image_url, 500_000),
+          i,
+        ]
+      );
+    }
+
+    const rows = await query(
+      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      [userId]
+    );
+    res.json({ results: rows.rows.map(serializeFavorite) });
+  } catch (err) {
+    console.error("Set favorite works error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function getProfileQuotes(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const rows = await query(
+      "SELECT id, text, attribution, source, is_favorite, is_original, rank FROM profile_quotes WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      [userResult.rows[0].id]
+    );
+    res.json({ results: rows.rows.map(serializeQuote) });
+  } catch (err) {
+    console.error("Get profile quotes error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function setProfileQuotes(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length > 40) {
+      res.status(400).json({ error: "items must be an array of up to 40 entries" });
+      return;
+    }
+
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (userResult.rows[0].id !== req.user!.userId) {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+    const userId = userResult.rows[0].id;
+
+    if (items.filter((item) => Boolean(item?.favorite)).length > 1) {
+      res.status(400).json({ error: "Only one quote can be the featured favorite" });
+      return;
+    }
+
+    await query("DELETE FROM profile_quotes WHERE user_id = $1", [userId]);
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] ?? {};
+      const quoteText = text(item.text, 1000);
+      if (!quoteText) continue;
+      await query(
+        `INSERT INTO profile_quotes (user_id, text, attribution, source, is_favorite, is_original, rank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          userId,
+          quoteText,
+          text(item.attribution, 300),
+          text(item.source, 300),
+          Boolean(item.favorite),
+          Boolean(item.original),
+          i,
+        ]
+      );
+    }
+
+    const rows = await query(
+      "SELECT id, text, attribution, source, is_favorite, is_original, rank FROM profile_quotes WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      [userId]
+    );
+    res.json({ results: rows.rows.map(serializeQuote) });
+  } catch (err) {
+    console.error("Set profile quotes error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 }

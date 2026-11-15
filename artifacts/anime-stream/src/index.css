@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Rajdhani:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&family=Rajdhani:wght@500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -221,6 +221,23 @@
  * need to be distinguished from eachother visually.
  */
 @layer utilities {
+
+  /* Profile showcase type */
+  .font-condensed {
+    font-family: 'Barlow Condensed', 'Rajdhani', sans-serif;
+  }
+
+  .font-quote {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {

@@ -182,6 +182,69 @@ CREATE INDEX IF NOT EXISTS idx_watch_user_anime ON watch_history(user_id, anime_
 CREATE INDEX IF NOT EXISTS idx_watch_user ON watch_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_progress_user ON watch_progress(user_id);
 CREATE INDEX IF NOT EXISTS idx_progress_user_anime ON watch_progress(user_id, anime_id);
+
+-- Profile studio fields -----------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(80) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS location VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS languages VARCHAR(200) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS website_url TEXT DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS instagram VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mal_username VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS currently_reading_title VARCHAR(200) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS currently_reading_chapter VARCHAR(80) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS currently_exploring TEXT DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_theme VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_mood VARCHAR(120) DEFAULT '';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS interests JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS taste_dna JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pinned_work JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pinned_quote JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS currently_into JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS traits JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE top_characters ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
+ALTER TABLE top_characters ADD COLUMN IF NOT EXISTS label VARCHAR(80) DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS favorite_works (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  anime_id INT,
+  title VARCHAR(500) NOT NULL,
+  work_type VARCHAR(20) NOT NULL DEFAULT 'ANIME',
+  meta VARCHAR(300) DEFAULT '',
+  rating VARCHAR(20) DEFAULT '',
+  image_url TEXT DEFAULT '',
+  rank INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_favorite_works_user ON favorite_works(user_id);
+
+CREATE TABLE IF NOT EXISTS profile_quotes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  attribution VARCHAR(300) DEFAULT '',
+  source VARCHAR(300) DEFAULT '',
+  is_favorite BOOLEAN DEFAULT FALSE,
+  is_original BOOLEAN DEFAULT FALSE,
+  rank INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_quotes_user ON profile_quotes(user_id);
+
+CREATE TABLE IF NOT EXISTS collection_likes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  collection_id UUID NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(collection_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_likes_collection ON collection_likes(collection_id);
 `;
 
 export async function runMigrations(): Promise<void> {
