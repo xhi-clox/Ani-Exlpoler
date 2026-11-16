@@ -242,6 +242,7 @@ function ImageField({
   maxHeight,
   aspect = "square",
   hint,
+  stack = false,
 }: {
   label: string;
   value: string;
@@ -250,6 +251,8 @@ function ImageField({
   maxHeight: number;
   aspect?: "square" | "wide" | "portrait";
   hint?: string;
+  /** Put the preview above the controls instead of beside them (narrow columns). */
+  stack?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -271,12 +274,22 @@ function ImageField({
 
   const previewClass =
     aspect === "wide" ? "h-16 w-28" : aspect === "portrait" ? "h-28 w-20" : "h-16 w-16 rounded-md";
+  const stackPreviewClass =
+    aspect === "wide"
+      ? "aspect-video w-full max-h-32"
+      : aspect === "portrait"
+        ? "aspect-[3/4] w-full max-h-60"
+        : "aspect-square w-full max-h-40";
 
   return (
     <div>
       <span className={LABEL}>{label}</span>
-      <div className="flex items-start gap-3">
-        <div className={`shrink-0 overflow-hidden rounded-md border border-[#2A3341] bg-[#0B1017] ${previewClass}`}>
+      <div className={stack ? "space-y-2.5" : "flex items-start gap-3"}>
+        <div
+          className={`overflow-hidden rounded-md border border-[#2A3341] bg-[#0B1017] ${
+            stack ? stackPreviewClass : `shrink-0 ${previewClass}`
+          }`}
+        >
           {value ? (
             <img src={value} alt="" className="h-full w-full object-cover" />
           ) : (
@@ -1030,7 +1043,7 @@ export default function SettingsPage() {
                     title="The pinned work"
                     description="The one story that defines your taste. This is the large card in your showcase."
                   >
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
                       <div className="space-y-4">
                         <div className="grid gap-4 sm:grid-cols-2">
                           <Field label="Eyebrow / label">
@@ -1135,6 +1148,7 @@ export default function SettingsPage() {
                         maxWidth={700}
                         maxHeight={1000}
                         aspect="portrait"
+                        stack
                       />
                     </div>
                   </SectionCard>
