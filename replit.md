@@ -15,7 +15,7 @@ A full-stack anime streaming web application. Browse trending and seasonal anime
 
 ## Deployment
 
-- **Frontend (Vercel)**: project root is the repository root; `vercel.json` sets the install/build commands and publishes `artifacts/anime-stream/dist/public`. Set `VITE_API_SERVER_URL` (for example `https://analithe-api.onrender.com/api`) in the Vercel project env vars so the built bundle knows where the API lives.
+- **Frontend (Vercel)**: works with either Root Directory. If the project root is `artifacts/anime-stream` (current setup), `artifacts/anime-stream/vercel.json` builds `dist/public`; if the root is the repository root, `vercel.json` builds `artifacts/anime-stream/dist/public`. Set `VITE_API_SERVER_URL` (for example `https://analithe-api.onrender.com/api`) in the Vercel project env vars so the built bundle knows where the API lives.
 - **API (Render)**: `render.yaml` builds `@workspace/api-server` from the repository root and starts `artifacts/api-server/dist/index.mjs`. Set `DATABASE_URL` (Render Postgres) and `JWT_SECRET`; Render injects `PORT`. Migrations run automatically on boot.
 - Health check: `GET /api/healthz`.
 - Local env template: `.env.example`.
