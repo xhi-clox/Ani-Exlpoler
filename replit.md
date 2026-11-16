@@ -13,6 +13,13 @@ A full-stack anime streaming web application. Browse trending and seasonal anime
 - Required env: `DATABASE_URL` — Postgres connection string (already provisioned)
 - Optional env: `MAL_CLIENT_ID`, `MAL_CLIENT_SECRET` — for MyAnimeList OAuth2 sync
 
+## Deployment
+
+- **Frontend (Vercel)**: project root is the repository root; `vercel.json` sets the install/build commands and publishes `artifacts/anime-stream/dist/public`. Set `VITE_API_SERVER_URL` (for example `https://analithe-api.onrender.com/api`) in the Vercel project env vars so the built bundle knows where the API lives.
+- **API (Render)**: `render.yaml` builds `@workspace/api-server` from the repository root and starts `artifacts/api-server/dist/index.mjs`. Set `DATABASE_URL` (Render Postgres) and `JWT_SECRET`; Render injects `PORT`. Migrations run automatically on boot.
+- Health check: `GET /api/healthz`.
+- Local env template: `.env.example`.
+
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9

@@ -1,4 +1,8 @@
-const API_URL = import.meta.env.VITE_API_SERVER_URL || "http://localhost:8080/api";
+// In production the frontend and API usually live on different hosts, so
+// `VITE_API_SERVER_URL` is injected at build time. When it is missing we fall
+// back to the same-origin `/api` path, which works both in `vite dev`
+// (proxied to the local API server) and behind a reverse proxy.
+const API_URL = import.meta.env.VITE_API_SERVER_URL || "/api";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

@@ -1,0 +1,31 @@
+# Render blueprint for the Analithe API server.
+#
+# The frontend is deployed separately on Vercel (see `vercel.json`). Render
+# builds the pnpm workspace at the repository root and starts the bundled
+# Express server. Migrations run automatically on boot when DATABASE_URL is
+# present (see `artifacts/api-server/src/index.ts`).
+services:
+  - type: web
+    name: analithe-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: .
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NODE_ENV
+        value: production
+      # Set this to your Render Postgres connection string (or any Postgres URL).
+      - key: DATABASE_URL
+        sync: false
+      # Generate a strong secret, e.g. `openssl rand -hex 32`.
+      - key: JWT_SECRET
+        generateValue: true
+      # Optional: "auto" (default), "jikan", or "anilist".
+      - key: ANIME_PROVIDER
+        value: auto
