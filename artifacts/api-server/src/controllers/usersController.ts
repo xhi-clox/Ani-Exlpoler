@@ -1,7 +1,18 @@
 import { Request, Response } from "express";
 import { query } from "../db/pool";
 
-const WORK_TYPES = new Set(["ANIME", "MANGA", "MANHWA", "NOVEL", "MOVIE"]);
+const WORK_TYPES = new Set([
+  "ANIME",
+  "MANGA",
+  "MANHWA",
+  "MANHUA",
+  "NOVEL",
+  "MOVIE",
+  "TV",
+  "GAME",
+  "MUSIC",
+  "ARTIST",
+]);
 const CURRENTLY_INTO_ICONS = new Set(["book", "headphones", "screen", "bookmark"]);
 
 function text(value: unknown, max = 500): string {
@@ -80,6 +91,9 @@ function serializeFavorite(row: Record<string, unknown>) {
     rating: row.rating ?? "",
     imageUrl: row.image_url ?? "",
     rank: row.rank,
+    externalId: row.external_id ?? null,
+    source: row.source ?? "",
+    metadata: row.metadata ?? {},
   };
 }
 
@@ -194,7 +208,7 @@ export async function getProfile(req: Request, res: Response): Promise<void> {
     );
 
     const favoriteWorks = await query(
-      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
+      `SELECT ${FAVORITE_COLUMNS} FROM favorite_works WHERE user_id = $1 ORDER BY work_type ASC, rank ASC, created_at ASC`,
       [user.id]
     );
 
@@ -855,6 +869,71 @@ export async function unfollowUser(req: Request, res: Response): Promise<void> {
   }
 }
 
+const FAVORITE_COLUMNS =
+  "id, anime_id, title, work_type, meta, rating, image_url, rank, external_id, source, metadata";
+
+function favoriteCategory(value: unknown): string | null {
+  const category = text(value, 20).toUpperCase();
+  return WORK_TYPES.has(category) ? category : null;
+}
+
+async function loadFavorites(userId: string, category?: string) {
+  const rows = await query(
+    `SELECT ${FAVORITE_COLUMNS} FROM favorite_works
+     WHERE user_id = $1${category ? " AND work_type = $2" : ""}
+     ORDER BY work_type ASC, rank ASC, created_at ASC`,
+    category ? [userId, category] : [userId],
+  );
+  return rows.rows.map(serializeFavorite);
+}
+
+async function replaceFavorites(
+  userId: string,
+  items: unknown[],
+  options: { category?: string; replaceAll: boolean },
+) {
+  if (options.replaceAll) {
+    await query("DELETE FROM favorite_works WHERE user_id = $1", [userId]);
+  } else {
+    await query("DELETE FROM favorite_works WHERE user_id = $1 AND work_type = $2", [
+      userId,
+      options.category,
+    ]);
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = (items[i] ?? {}) as Record<string, unknown>;
+    const title = text(item.title, 500);
+    if (!title) continue;
+
+    const type = options.category ?? favoriteCategory(item.type) ?? "ANIME";
+    const animeId = Number(item.anime_id ?? item.animeId);
+    const metadata =
+      item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+        ? (item.metadata as Record<string, unknown>)
+        : {};
+
+    await query(
+      `INSERT INTO favorite_works
+        (user_id, anime_id, title, work_type, meta, rating, image_url, rank, external_id, source, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        userId,
+        Number.isFinite(animeId) && animeId > 0 ? animeId : null,
+        title,
+        type,
+        text(item.meta, 300),
+        text(item.rating, 20),
+        text(item.image_url ?? item.imageUrl, 500_000),
+        i,
+        text(item.external_id ?? item.externalId, 120),
+        text(item.source, 40),
+        metadata,
+      ],
+    );
+  }
+}
+
 export async function getFavoriteWorks(req: Request, res: Response): Promise<void> {
   try {
     const username = req.params.username as string;
@@ -863,13 +942,59 @@ export async function getFavoriteWorks(req: Request, res: Response): Promise<voi
       res.status(404).json({ error: "User not found" });
       return;
     }
-    const rows = await query(
-      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
-      [userResult.rows[0].id]
-    );
-    res.json({ results: rows.rows.map(serializeFavorite) });
+    res.json({ results: await loadFavorites(userResult.rows[0].id) });
   } catch (err) {
     console.error("Get favorite works error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function getFavorites(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const results = await loadFavorites(userResult.rows[0].id);
+    const byCategory: Record<string, unknown[]> = {};
+    const counts: Record<string, number> = {};
+
+    for (const favorite of results) {
+      const category = String(favorite.type ?? "ANIME");
+      if (!byCategory[category]) byCategory[category] = [];
+      byCategory[category].push(favorite);
+      counts[category] = (counts[category] ?? 0) + 1;
+    }
+
+    res.json({ results, byCategory, counts });
+  } catch (err) {
+    console.error("Get favorites error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function getFavoritesByCategory(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const category = favoriteCategory(req.params.category);
+    if (!category) {
+      res.status(400).json({ error: "Unknown favorites category" });
+      return;
+    }
+
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const results = await loadFavorites(userResult.rows[0].id, category);
+    res.json({ category, count: results.length, results });
+  } catch (err) {
+    console.error("Get favorites by category error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 }
@@ -878,6 +1003,40 @@ export async function setFavoriteWorks(req: Request, res: Response): Promise<voi
   try {
     const username = req.params.username as string;
     const { items } = req.body;
+    if (!Array.isArray(items) || items.length > 200) {
+      res.status(400).json({ error: "items must be an array of up to 200 entries" });
+      return;
+    }
+
+    const userResult = await query("SELECT id FROM users WHERE username = $1", [username]);
+    if (userResult.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (userResult.rows[0].id !== req.user!.userId) {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+    const userId = userResult.rows[0].id;
+
+    await replaceFavorites(userId, items, { replaceAll: true });
+    res.json({ results: await loadFavorites(userId) });
+  } catch (err) {
+    console.error("Set favorite works error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+export async function setFavoritesByCategory(req: Request, res: Response): Promise<void> {
+  try {
+    const username = req.params.username as string;
+    const category = favoriteCategory(req.params.category);
+    const { items } = req.body;
+
+    if (!category) {
+      res.status(400).json({ error: "Unknown favorites category" });
+      return;
+    }
     if (!Array.isArray(items) || items.length > 40) {
       res.status(400).json({ error: "items must be an array of up to 40 entries" });
       return;
@@ -894,36 +1053,11 @@ export async function setFavoriteWorks(req: Request, res: Response): Promise<voi
     }
     const userId = userResult.rows[0].id;
 
-    await query("DELETE FROM favorite_works WHERE user_id = $1", [userId]);
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i] ?? {};
-      const title = text(item.title, 500);
-      if (!title) continue;
-      const type = text(item.type, 20).toUpperCase();
-      await query(
-        `INSERT INTO favorite_works (user_id, anime_id, title, work_type, meta, rating, image_url, rank)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          userId,
-          Number.isFinite(Number(item.anime_id)) && Number(item.anime_id) > 0 ? Number(item.anime_id) : null,
-          title,
-          WORK_TYPES.has(type) ? type : "ANIME",
-          text(item.meta, 300),
-          text(item.rating, 20),
-          text(item.image_url, 500_000),
-          i,
-        ]
-      );
-    }
-
-    const rows = await query(
-      "SELECT id, anime_id, title, work_type, meta, rating, image_url, rank FROM favorite_works WHERE user_id = $1 ORDER BY rank ASC, created_at ASC",
-      [userId]
-    );
-    res.json({ results: rows.rows.map(serializeFavorite) });
+    await replaceFavorites(userId, items, { category, replaceAll: false });
+    const results = await loadFavorites(userId, category);
+    res.json({ category, count: results.length, results });
   } catch (err) {
-    console.error("Set favorite works error:", err);
+    console.error("Set favorites by category error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 }

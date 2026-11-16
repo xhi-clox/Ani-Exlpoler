@@ -29,12 +29,14 @@ import {
   updateCollection as updateCollectionRequest,
   addCollectionItem,
   removeCollectionItem,
-  setFavoriteWorks,
+  setFavoritesByCategory,
   setProfileQuotes,
   setTopCharacters,
   updateProfile,
   getProfile,
 } from "../api/users";
+import { searchCatalog } from "../api/catalog";
+import { CATALOG_CATEGORIES } from "../data/catalog";
 import { searchAnime, searchCharacters, type AnimeListResponse, type CharacterSearchResult } from "../api/anime";
 import type {
   CharacterEntry,
@@ -56,7 +58,6 @@ const FIELD =
   "w-full rounded-md border border-[#2A3341] bg-[#0B1017] px-3 py-2 text-[12px] text-white placeholder:text-[#5B6678] outline-none transition-colors focus:border-[#38C8E0]/60 focus:ring-2 focus:ring-[#38C8E0]/10";
 const LABEL = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8A94A6]";
 
-const WORK_TYPES: ProfileWorkType[] = ["ANIME", "MANGA", "MANHWA", "NOVEL", "MOVIE"];
 const TRAIT_ICON_KEYS = ["sparkles", "target", "moon", "swords", "pen"];
 const INTO_ICONS = ["book", "headphones", "screen", "bookmark"];
 
@@ -109,6 +110,9 @@ interface FavoriteDraft {
   rating: string;
   imageUrl: string;
   animeId: number | null;
+  externalId: string;
+  source: string;
+  metadata: Record<string, unknown>;
 }
 
 interface QuoteDraft {
@@ -155,6 +159,9 @@ function favoritesFromProfile(items: FavoriteWorkEntry[] | undefined): FavoriteD
     rating: item.rating,
     imageUrl: item.imageUrl,
     animeId: item.animeId,
+    externalId: item.externalId ?? "",
+    source: item.source ?? "",
+    metadata: item.metadata ?? {},
   }));
 }
 
@@ -342,18 +349,25 @@ function ImageField({
 }
 
 interface SearchPick {
-  id: number;
+  id: string | number;
   title: string;
   subtitle: string;
   imageUrl: string;
+  category?: ProfileWorkType;
+  externalUrl?: string | null;
+  source?: string;
+  rating?: string;
+  metadata?: Record<string, unknown>;
 }
 
 function SearchAdd({
   mode,
+  category,
   placeholder,
   onPick,
 }: {
-  mode: "anime" | "character";
+  mode: "anime" | "character" | "catalog";
+  category?: ProfileWorkType;
   placeholder: string;
   onPick: (pick: SearchPick) => void;
 }) {
@@ -371,16 +385,35 @@ function SearchAdd({
     const timer = setTimeout(async () => {
       setBusy(true);
       try {
-        if (mode === "anime") {
+        if (mode === "catalog" && category) {
+          const data = await searchCatalog(category, term);
+          if (cancelled) return;
+          setResults(
+            data.results.map((item) => ({
+              id: item.id,
+              title: item.title,
+              subtitle: item.subtitle,
+              imageUrl: item.image ?? "",
+              category: item.category,
+              externalUrl: item.externalUrl,
+              source: item.source,
+              rating: item.rating ? String(item.rating) : "",
+              metadata: item.metadata,
+            })),
+          );
+        } else if (mode === "anime") {
           const data: AnimeListResponse = await searchAnime(term);
           if (cancelled) return;
           setResults(
             data.results.map((item) => ({
-              id: Number(item.id),
+              id: item.id,
               title: item.title,
               subtitle: [item.type, item.releaseDate?.slice(0, 4)].filter(Boolean).join(" · "),
               imageUrl: item.image ?? "",
-            }))
+              category: "ANIME",
+              source: "anime",
+              metadata: { providerId: item.id },
+            })),
           );
         } else {
           const data: { results: CharacterSearchResult[] } = await searchCharacters(term);
@@ -391,7 +424,7 @@ function SearchAdd({
               title: item.name,
               subtitle: item.animeName ?? "",
               imageUrl: item.imageUrl ?? "",
-            }))
+            })),
           );
         }
       } catch {
@@ -405,7 +438,7 @@ function SearchAdd({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [mode, query]);
+  }, [mode, category, query]);
 
   return (
     <div className="relative">
@@ -507,6 +540,7 @@ export default function SettingsPage() {
   });
   const [showcase, setShowcase] = useState<ShowcaseDraft>(EMPTY_SHOWCASE);
   const [favorites, setFavorites] = useState<FavoriteDraft[]>([]);
+  const [favoriteCategory, setFavoriteCategory] = useState<ProfileWorkType>("ANIME");
   const [characters, setCharacters] = useState<CharacterEntry[]>([]);
   const [quotes, setQuotes] = useState<QuoteDraft[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -653,21 +687,29 @@ export default function SettingsPage() {
   const saveFavorites = () =>
     run(async () => {
       if (!user) return;
-      const response = await setFavoriteWorks(
-        user.username,
-        favorites
-          .filter((item) => item.title.trim())
-          .map((item) => ({
-            title: item.title.trim(),
-            type: item.type,
-            meta: item.meta,
-            rating: item.rating,
-            image_url: item.imageUrl,
-            anime_id: item.animeId,
-          }))
+      const categoryItems = favorites.filter(
+        (item) => item.type === favoriteCategory && item.title.trim(),
       );
-      setFavorites(favoritesFromProfile(response.results));
-    }, "Favorites saved");
+      const response = await setFavoritesByCategory(
+        user.username,
+        favoriteCategory,
+        categoryItems.map((item) => ({
+          title: item.title.trim(),
+          type: item.type,
+          meta: item.meta,
+          rating: item.rating,
+          image_url: item.imageUrl,
+          anime_id: item.animeId,
+          external_id: item.externalId || null,
+          source: item.source,
+          metadata: item.metadata,
+        })),
+      );
+      setFavorites((current) => [
+        ...current.filter((item) => item.type !== favoriteCategory),
+        ...favoritesFromProfile(response.results),
+      ]);
+    }, `${favoriteCategory} favorites saved`);
 
   const saveCharacters = () =>
     run(async () => {
@@ -750,7 +792,7 @@ export default function SettingsPage() {
   const handleAddListItem = async (collectionId: string, pick: SearchPick) => {
     try {
       const item = await addCollectionItem(collectionId, {
-        anime_id: pick.id,
+        anime_id: Number(pick.id),
         title: pick.title,
         image_url: pick.imageUrl,
       });
@@ -804,6 +846,30 @@ export default function SettingsPage() {
       </div>
     );
   }
+
+  const activeCategory =
+    CATALOG_CATEGORIES.find((category) => category.id === favoriteCategory) ?? CATALOG_CATEGORIES[0];
+  const categoryFavorites = favorites.filter((item) => item.type === favoriteCategory);
+
+  const updateFavoriteDraft = (key: string, patch: Partial<FavoriteDraft>) =>
+    setFavorites((current) =>
+      current.map((item) => (item.key === key ? { ...item, ...patch } : item)),
+    );
+
+  const moveFavoriteDraft = (key: string, direction: -1 | 1) =>
+    setFavorites((current) => {
+      const indexes = current
+        .map((item, index) => (item.type === favoriteCategory ? index : -1))
+        .filter((index) => index >= 0);
+      const position = indexes.findIndex((index) => current[index].key === key);
+      const target = position + direction;
+      if (position < 0 || target < 0 || target >= indexes.length) return current;
+      const next = [...current];
+      const a = indexes[position];
+      const b = indexes[target];
+      [next[a], next[b]] = [next[b], next[a]];
+      return next;
+    });
 
   return (
     <div className="mx-auto w-full max-w-[1080px] px-4 py-6 sm:px-6 lg:px-[63px]">
@@ -1510,109 +1576,157 @@ export default function SettingsPage() {
               {tab === "favorites" ? (
                 <>
                   <SectionCard
-                    title="Favorite works"
-                    description="The Hall of Fame on your profile. Add anime, manga, manhwa, novels, or films."
+                    title="Favorite works by category"
+                    description="Every category gets its own section on your profile — anime, manga, manhwa, manhua, novels, movies, TV, games, music and artists."
                     actions={
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFavorites([
-                            ...favorites,
-                            { key: uid(), title: "", type: "ANIME", meta: "", rating: "", imageUrl: "", animeId: null },
-                          ])
-                        }
-                        className="inline-flex items-center gap-1 rounded-md border border-[#2A3341] px-2 py-1 text-[10px] text-[#CBD5E1] transition-colors hover:border-[#38C8E0]/50"
-                      >
-                        <Plus className="h-3 w-3" /> Add work
-                      </button>
+                      <span className="text-[10px] text-[#64748B]">
+                        {categoryFavorites.length} / 40 · {favorites.length} total
+                      </span>
                     }
                   >
-                    <SearchAdd
-                      mode="anime"
-                      placeholder="Search anime to add quickly…"
-                      onPick={(pick) =>
-                        setFavorites([
-                          ...favorites,
-                          {
-                            key: uid(),
-                            title: pick.title,
-                            type: "ANIME",
-                            meta: pick.subtitle,
-                            rating: "",
-                            imageUrl: pick.imageUrl,
-                            animeId: pick.id,
-                          },
-                        ])
-                      }
-                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {CATALOG_CATEGORIES.map((category) => {
+                        const count = favorites.filter((item) => item.type === category.id).length;
+                        const active = favoriteCategory === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => setFavoriteCategory(category.id)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                              active
+                                ? "bg-white/[0.06] text-white"
+                                : "border-[#2A3341] text-[#8A94A6] hover:border-[#3A4658] hover:text-white"
+                            }`}
+                            style={active ? { borderColor: `${category.accent}66`, color: category.accent } : undefined}
+                          >
+                            {category.label}
+                            <span
+                              className="text-[9px]"
+                              style={{ color: active ? category.accent : count > 0 ? "#CBD5E1" : "#5B6678" }}
+                            >
+                              {count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    {favorites.length === 0 ? (
-                      <p className="py-2 text-center text-[11px] text-[#8A94A6]">No favorites yet. Add your first one.</p>
+                    <div className="rounded-lg border border-[#1E2630] bg-[#0B1017] p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                            {activeCategory.label}
+                          </p>
+                          <p className="mt-0.5 text-[10px] leading-relaxed text-[#8A94A6]">
+                            {activeCategory.blurb} · {activeCategory.source}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFavorites((current) => [
+                              ...current,
+                              {
+                                key: uid(),
+                                title: "",
+                                type: favoriteCategory,
+                                meta: "",
+                                rating: "",
+                                imageUrl: "",
+                                animeId: null,
+                                externalId: "",
+                                source: "",
+                                metadata: {},
+                              },
+                            ])
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-[#2A3341] px-2 py-1 text-[10px] text-[#CBD5E1] transition-colors hover:border-[#38C8E0]/50"
+                        >
+                          <Plus className="h-3 w-3" /> Add manually
+                        </button>
+                      </div>
+
+                      <div className="mt-3">
+                        <SearchAdd
+                          mode="catalog"
+                          category={favoriteCategory}
+                          placeholder={`Search ${activeCategory.singular} to add…`}
+                          onPick={(pick) =>
+                            setFavorites((current) => [
+                              ...current,
+                              {
+                                key: uid(),
+                                title: pick.title,
+                                type: pick.category ?? favoriteCategory,
+                                meta: pick.subtitle,
+                                rating: pick.rating ?? "",
+                                imageUrl: pick.imageUrl,
+                                animeId:
+                                  pick.source === "anime" && Number.isFinite(Number(pick.id))
+                                    ? Number(pick.id)
+                                    : null,
+                                externalId: String(pick.id),
+                                source: pick.source ?? "",
+                                metadata: pick.metadata ?? {},
+                              },
+                            ])
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    {categoryFavorites.length === 0 ? (
+                      <p className="py-2 text-center text-[11px] text-[#8A94A6]">
+                        No {activeCategory.label.toLowerCase()} favorites yet. Search above or add one manually.
+                      </p>
                     ) : null}
 
                     <div className="space-y-3">
-                      {favorites.map((favorite, index) => (
+                      {categoryFavorites.map((favorite, index) => (
                         <div key={favorite.key} className="rounded-lg border border-[#1E2630] bg-[#0B1017] p-3">
                           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_110px]">
                             <div className="space-y-2">
                               <input
                                 value={favorite.title}
-                                onChange={(event) => {
-                                  const next = [...favorites];
-                                  next[index] = { ...next[index], title: event.target.value };
-                                  setFavorites(next);
-                                }}
+                                onChange={(event) =>
+                                  updateFavoriteDraft(favorite.key, { title: event.target.value })
+                                }
                                 maxLength={500}
                                 className={FIELD}
                                 placeholder="Title"
                               />
                               <input
                                 value={favorite.meta}
-                                onChange={(event) => {
-                                  const next = [...favorites];
-                                  next[index] = { ...next[index], meta: event.target.value };
-                                  setFavorites(next);
-                                }}
+                                onChange={(event) =>
+                                  updateFavoriteDraft(favorite.key, { meta: event.target.value })
+                                }
                                 maxLength={300}
                                 className={FIELD}
-                                placeholder="Dark fantasy · 2013"
+                                placeholder="Creator · Year · Genre"
                               />
                               <ImageField
                                 label="Cover"
                                 value={favorite.imageUrl}
-                                onChange={(imageUrl) => {
-                                  const next = [...favorites];
-                                  next[index] = { ...next[index], imageUrl };
-                                  setFavorites(next);
-                                }}
+                                onChange={(imageUrl) => updateFavoriteDraft(favorite.key, { imageUrl })}
                                 maxWidth={600}
                                 maxHeight={800}
                                 aspect="portrait"
                               />
                             </div>
                             <div className="space-y-2">
-                              <select
-                                value={favorite.type}
-                                onChange={(event) => {
-                                  const next = [...favorites];
-                                  next[index] = { ...next[index], type: event.target.value as ProfileWorkType };
-                                  setFavorites(next);
-                                }}
-                                className={FIELD}
-                              >
-                                {WORK_TYPES.map((type) => (
-                                  <option key={type} value={type}>
-                                    {type}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="flex items-center gap-1.5 rounded-md border border-[#2A3341] bg-[#0B1017] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-[#8A94A6]">
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ backgroundColor: activeCategory.accent }}
+                                />
+                                {activeCategory.label}
+                              </div>
                               <input
                                 value={favorite.rating}
-                                onChange={(event) => {
-                                  const next = [...favorites];
-                                  next[index] = { ...next[index], rating: event.target.value };
-                                  setFavorites(next);
-                                }}
+                                onChange={(event) =>
+                                  updateFavoriteDraft(favorite.key, { rating: event.target.value })
+                                }
                                 maxLength={20}
                                 className={FIELD}
                                 placeholder="Rating 9.8"
@@ -1621,29 +1735,25 @@ export default function SettingsPage() {
                                 <IconButton
                                   label="Move up"
                                   disabled={index === 0}
-                                  onClick={() => {
-                                    const next = [...favorites];
-                                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                                    setFavorites(next);
-                                  }}
+                                  onClick={() => moveFavoriteDraft(favorite.key, -1)}
                                 >
                                   <ArrowUp className="h-3 w-3" />
                                 </IconButton>
                                 <IconButton
                                   label="Move down"
-                                  disabled={index === favorites.length - 1}
-                                  onClick={() => {
-                                    const next = [...favorites];
-                                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
-                                    setFavorites(next);
-                                  }}
+                                  disabled={index === categoryFavorites.length - 1}
+                                  onClick={() => moveFavoriteDraft(favorite.key, 1)}
                                 >
                                   <ArrowDown className="h-3 w-3" />
                                 </IconButton>
                                 <IconButton
                                   label="Remove favorite"
                                   danger
-                                  onClick={() => setFavorites(favorites.filter((_, i) => i !== index))}
+                                  onClick={() =>
+                                    setFavorites((current) =>
+                                      current.filter((item) => item.key !== favorite.key),
+                                    )
+                                  }
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </IconButton>
@@ -1655,7 +1765,11 @@ export default function SettingsPage() {
                     </div>
                   </SectionCard>
 
-                  <SaveBar saving={saving} onSave={saveFavorites} label="Save favorites" />
+                  <SaveBar
+                    saving={saving}
+                    onSave={saveFavorites}
+                    label={`Save ${activeCategory.label} favorites`}
+                  />
                 </>
               ) : null}
 
@@ -1673,11 +1787,11 @@ export default function SettingsPage() {
                       placeholder="Search characters to add…"
                       onPick={(pick) => {
                         if (characters.length >= 10) return;
-                        if (characters.some((item) => item.characterId === pick.id)) return;
+                        if (characters.some((item) => item.characterId === Number(pick.id))) return;
                         setCharacters([
                           ...characters,
                           {
-                            characterId: pick.id,
+                            characterId: Number(pick.id),
                             name: pick.title,
                             imageUrl: pick.imageUrl,
                             animeName: pick.subtitle,

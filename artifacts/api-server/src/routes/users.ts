@@ -14,6 +14,9 @@ import {
   setTopCharacters,
   getFavoriteWorks,
   setFavoriteWorks,
+  getFavorites,
+  getFavoritesByCategory,
+  setFavoritesByCategory,
   getProfileQuotes,
   setProfileQuotes,
   upvoteProfile,
@@ -41,6 +44,9 @@ router.get("/:username/top-characters", getTopCharacters);
 router.put("/:username/top-characters", requireAuth, setTopCharacters);
 router.get("/:username/favorite-works", getFavoriteWorks);
 router.put("/:username/favorite-works", requireAuth, setFavoriteWorks);
+router.get("/:username/favorites", getFavorites);
+router.get("/:username/favorites/:category", getFavoritesByCategory);
+router.put("/:username/favorites/:category", requireAuth, setFavoritesByCategory);
 router.get("/:username/quotes", getProfileQuotes);
 router.put("/:username/quotes", requireAuth, setProfileQuotes);
 router.post("/:username/upvote-taste", requireAuth, upvoteProfile);

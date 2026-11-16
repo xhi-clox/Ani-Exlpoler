@@ -84,6 +84,7 @@ import {
   type ProfileQuote,
   type WorkType,
 } from "../data/profileShowcase";
+import { CATALOG_CATEGORIES } from "../data/catalog";
 
 const ACCENT = "#38C8E0";
 const PANEL = "#11161D";
@@ -146,8 +147,13 @@ const WORK_TYPE_COLORS: Record<WorkType, string> = {
   ANIME: "text-[#7DD3FC]",
   MANGA: "text-[#FDA4AF]",
   MANHWA: "text-[#6EE7B7]",
+  MANHUA: "text-[#FDBA74]",
   NOVEL: "text-[#FCD34D]",
   MOVIE: "text-[#C4B5FD]",
+  TV: "text-[#34D399]",
+  GAME: "text-[#F87171]",
+  MUSIC: "text-[#C084FC]",
+  ARTIST: "text-[#FB7185]",
 };
 
 const CHARACTER_LABELS = ["THE DEFIANT", "THE VOID", "THE MASK", "THE READER", "THE DREAMER", "THE WANDERER"];
@@ -356,7 +362,6 @@ export default function UserProfile() {
   const [preview, setPreview] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [activeTab, setActiveTab] = useState("showcase");
-  const [favoriteFilter, setFavoriteFilter] = useState<WorkType | "ALL">("ALL");
   const [copied, setCopied] = useState(false);
   const asideRef = useRef<HTMLElement | null>(null);
 
@@ -566,15 +571,15 @@ export default function UserProfile() {
     return isPreview ? DEMO_QUOTES : [];
   }, [data, isPreview]);
 
-  const workCounts = useMemo(() => {
-    const counts: Record<WorkType, number> = { ANIME: 0, MANGA: 0, MANHWA: 0, NOVEL: 0, MOVIE: 0 };
+  const favoritesByType = useMemo(() => {
+    const groups = new Map<WorkType, FavoriteWork[]>();
     favorites.forEach((work) => {
-      counts[work.type] += 1;
+      const bucket = groups.get(work.type) ?? [];
+      bucket.push(work);
+      groups.set(work.type, bucket);
     });
-    return counts;
+    return groups;
   }, [favorites]);
-
-  const visibleFavorites = favoriteFilter === "ALL" ? favorites : favorites.filter((work) => work.type === favoriteFilter);
 
   const featuredAnalysis: Analysis | null = data?.recentAnalyses?.[0] ?? null;
   const featured = featuredAnalysis
@@ -1207,92 +1212,115 @@ export default function UserProfile() {
               </div>
             </section>
 
-            {/* Favorite works */}
+            {/* Favorite works, grouped by category */}
             <section id="favorites" className="scroll-mt-32">
               <SectionHead
                 eyebrow="HALL OF FAME"
                 title="Favorite Works"
                 action={
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setFavoriteFilter("ALL")}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-medium transition-colors ${
-                        favoriteFilter === "ALL" ? "bg-white text-[#0A0D12]" : "text-[#CBD5E1] hover:text-white"
-                      }`}
+                  isOwn ? (
+                    <Link
+                      href="/settings?tab=favorites"
+                      className="inline-flex items-center gap-1 text-[10px] font-medium text-[#38C8E0] hover:text-[#6BDDF8]"
                     >
-                      All <span className={`text-[9px] ${favoriteFilter === "ALL" ? "text-[#475569]" : "text-[#64748B]"}`}>{favorites.length}</span>
-                    </button>
-                    {(Object.keys(workCounts) as WorkType[])
-                      .filter((type) => workCounts[type] > 0)
-                      .map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setFavoriteFilter(type)}
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium capitalize transition-colors ${
-                            favoriteFilter === type ? "bg-white text-[#0A0D12]" : "text-[#CBD5E1] hover:text-white"
-                          }`}
-                        >
-                          {type.charAt(0) + type.slice(1).toLowerCase()}
-                          <span className={`text-[9px] ${favoriteFilter === type ? "text-[#475569]" : "text-[#64748B]"}`}>
-                            {workCounts[type]}
-                          </span>
-                        </button>
-                      ))}
-                  </div>
+                      Manage <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  ) : undefined
                 }
               />
-              <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 md:grid-cols-4">
-                {visibleFavorites.map((work) => (
-                  <article key={work.id} className="group min-w-0">
-                    <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[#1E2630] bg-[#0D1117]">
-                      <WorkCover work={work} />
-                      <span className="absolute left-2 top-1 font-condensed text-[38px] font-bold leading-none text-white/90 [text-shadow:0_2px_10px_rgba(0,0,0,.6)]">
-                        {String(favorites.findIndex((item) => item.id === work.id) + 1).padStart(2, "0")}
-                      </span>
-                      <span
-                        className={`absolute right-2 top-2 text-[8px] font-semibold uppercase tracking-[0.12em] [text-shadow:0_1px_6px_rgba(0,0,0,.7)] ${WORK_TYPE_COLORS[work.type]}`}
-                      >
-                        {work.type}
-                      </span>
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-black/10 opacity-0 transition-opacity group-hover:opacity-100" />
-                    </div>
-                    <div className="mt-2 min-w-0">
-                      <h3 className="line-clamp-2 text-[11.5px] font-medium leading-snug text-white">{work.title}</h3>
-                      <div className="mt-1 flex items-baseline justify-between gap-2">
-                        <p className="truncate text-[9px] text-[#8A94A6]">{work.meta}</p>
-                        {work.rating ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 text-[9px] text-[#FCD34D]">
-                            <Star className="h-2.5 w-2.5 fill-current" />
-                            {work.rating}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                ))}
 
-                {isOwn ? (
-                  <Link
-                    href="/settings?tab=favorites"
-                    className="group flex aspect-[3/4] flex-col items-center justify-center gap-3 self-start rounded-lg border border-dashed border-[#2A3341] bg-[#0D1117]/40 px-2 text-center transition-colors hover:border-[#38C8E0]/40 hover:bg-[#11161D]"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2A3341] bg-white/[0.02] text-[#8A94A6] transition-colors group-hover:border-[#38C8E0]/40 group-hover:text-[#38C8E0]">
-                      <Plus className="h-4 w-4" />
-                    </span>
-                    <span>
-                      <span className="block text-[10px] text-[#8A94A6]">Add a favorite</span>
-                      <span className="mt-1 block text-[8px] leading-relaxed text-[#64748B]">Anime · Manga · Novel · Film…</span>
-                    </span>
-                  </Link>
-                ) : null}
-                {visibleFavorites.length === 0 && !isOwn ? (
-                  <p className="col-span-full py-6 text-center text-[11px] text-[#8A94A6]">
-                    No favorite works yet.
+              {favorites.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#2A3341] bg-[#0D1117]/40 px-4 py-8 text-center">
+                  <p className="text-[11px] text-[#8A94A6]">
+                    {isOwn ? "No favorite works yet." : "No favorite works yet."}
                   </p>
-                ) : null}
-              </div>
+                  {isOwn ? (
+                    <Link
+                      href="/settings?tab=favorites"
+                      className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-[#38C8E0] hover:text-[#6BDDF8]"
+                    >
+                      Add favorites <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-9">
+                  {CATALOG_CATEGORIES.map((category) => {
+                    const items = favoritesByType.get(category.id) ?? [];
+                    if (items.length === 0) return null;
+                    return (
+                      <div
+                        key={category.id}
+                        id={`favorites-${category.id.toLowerCase()}`}
+                        className="scroll-mt-32"
+                      >
+                        <div className="mb-3 flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: category.accent }}
+                          />
+                          <h3 className="font-condensed text-[12px] font-bold uppercase tracking-[0.16em] text-white">
+                            Favorite {category.label}
+                          </h3>
+                          <span className="text-[9px] text-[#64748B]">{items.length}</span>
+                          <span className="h-px flex-1 bg-[#1E2630]" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 md:grid-cols-4">
+                          {items.map((work, index) => (
+                            <article key={work.id} className="group min-w-0">
+                              <div className="relative aspect-[3/4] overflow-hidden rounded-lg border border-[#1E2630] bg-[#0D1117]">
+                                <WorkCover work={work} />
+                                <span className="absolute left-2 top-1 font-condensed text-[38px] font-bold leading-none text-white/90 [text-shadow:0_2px_10px_rgba(0,0,0,.6)]">
+                                  {String(index + 1).padStart(2, "0")}
+                                </span>
+                                <span
+                                  className={`absolute right-2 top-2 text-[8px] font-semibold uppercase tracking-[0.12em] [text-shadow:0_1px_6px_rgba(0,0,0,.7)] ${WORK_TYPE_COLORS[work.type]}`}
+                                >
+                                  {work.type}
+                                </span>
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-black/10 opacity-0 transition-opacity group-hover:opacity-100" />
+                              </div>
+                              <div className="mt-2 min-w-0">
+                                <h3 className="line-clamp-2 text-[11.5px] font-medium leading-snug text-white">
+                                  {work.title}
+                                </h3>
+                                <div className="mt-1 flex items-baseline justify-between gap-2">
+                                  <p className="truncate text-[9px] text-[#8A94A6]">{work.meta}</p>
+                                  {work.rating ? (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-[9px] text-[#FCD34D]">
+                                      <Star className="h-2.5 w-2.5 fill-current" />
+                                      {work.rating}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+
+                          {isOwn ? (
+                            <Link
+                              href="/settings?tab=favorites"
+                              className="group flex aspect-[3/4] flex-col items-center justify-center gap-3 self-start rounded-lg border border-dashed border-[#2A3341] bg-[#0D1117]/40 px-2 text-center transition-colors hover:border-[#38C8E0]/40 hover:bg-[#11161D]"
+                            >
+                              <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2A3341] bg-white/[0.02] text-[#8A94A6] transition-colors group-hover:border-[#38C8E0]/40 group-hover:text-[#38C8E0]">
+                                <Plus className="h-4 w-4" />
+                              </span>
+                              <span>
+                                <span className="block text-[10px] text-[#8A94A6]">
+                                  Add {category.singular}
+                                </span>
+                                <span className="mt-1 block text-[8px] leading-relaxed text-[#64748B]">
+                                  {category.source}
+                                </span>
+                              </span>
+                            </Link>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             {/* Favorite characters */}

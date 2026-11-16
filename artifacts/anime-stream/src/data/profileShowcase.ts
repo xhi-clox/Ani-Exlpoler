@@ -3,7 +3,17 @@
 // editorial blocks of the showcase are defined here. Real profile data takes
 // priority wherever it exists.
 
-export type WorkType = "ANIME" | "MANGA" | "MANHWA" | "NOVEL" | "MOVIE";
+export type WorkType =
+  | "ANIME"
+  | "MANGA"
+  | "MANHWA"
+  | "MANHUA"
+  | "NOVEL"
+  | "MOVIE"
+  | "TV"
+  | "GAME"
+  | "MUSIC"
+  | "ARTIST";
 
 export interface FavoriteWork {
   id: string;

@@ -8,6 +8,7 @@ import commentsRouter from "./comments";
 import collectionsRouter from "./collections";
 import sourcesRouter from "./sources";
 import watchRouter from "./watch";
+import catalogRouter from "./catalog";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/comments", commentsRouter);
 router.use("/collections", collectionsRouter);
 router.use(sourcesRouter);
 router.use(watchRouter);
+router.use(catalogRouter);
 
 export default router;

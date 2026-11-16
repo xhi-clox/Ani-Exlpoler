@@ -16,6 +16,7 @@ import WriteAnalysis from "@/pages/WriteAnalysis";
 import UserProfile from "@/pages/UserProfile";
 import SettingsPage from "@/pages/SettingsPage";
 import WatchHistory from "@/pages/WatchHistory";
+import Discover from "@/pages/Discover";
 
 const apiUrl = import.meta.env.VITE_API_SERVER_URL;
 if (apiUrl) setBaseUrl(apiUrl);
@@ -35,6 +36,7 @@ function Router() {
       <Switch>
         <Route path="/" component={BrowseAnalyses} />
         <Route path="/search" component={Search} />
+        <Route path="/discover" component={Discover} />
         <Route path="/anime/:id" component={AnimeInfo} />
         <Route path="/login" component={LoginPage} />
         <Route path="/signup" component={SignupPage} />

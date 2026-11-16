@@ -9,7 +9,7 @@ const providers: Record<string, AnimeProvider> = {
   anilist: anilistProvider,
 };
 
-const providerOrder = ["jikan", "anilist"];
+const providerOrder = ["anilist", "jikan"];
 
 function getActiveProvider(): string {
   return process.env.ANIME_PROVIDER || "auto";

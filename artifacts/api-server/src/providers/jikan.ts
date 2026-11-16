@@ -5,7 +5,7 @@ const JIKAN = "https://api.jikan.moe/v4";
 async function jikanFetch(path: string): Promise<unknown> {
   const res = await fetch(`${JIKAN}${path}`, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(6000),
   });
   if (!res.ok) throw new Error(`Jikan ${path} → ${res.status}`);
   return res.json();

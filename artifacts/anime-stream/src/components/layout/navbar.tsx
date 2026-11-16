@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Search, Sparkles, BookOpen, LogOut, Menu, Settings } from "lucide-react";
+import { Search, Sparkles, BookOpen, LogOut, Menu, Settings, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -36,6 +36,12 @@ export function Navbar() {
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">
+          <Link href="/discover">
+            <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
+              <Compass className="w-4 h-4" />
+              Discover
+            </Button>
+          </Link>
           <Link href="/analyses">
             <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground">
               <BookOpen className="w-4 h-4" />
@@ -84,6 +90,12 @@ export function Navbar() {
                     </Button>
                   </Link>
                 )}
+                <Link href="/discover" onClick={closeMenu}>
+                  <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl border border-transparent text-base text-foreground hover:border-primary/30 hover:bg-secondary/70" size="lg">
+                    <Compass className="w-5 h-5" />
+                    Discover
+                  </Button>
+                </Link>
                 <Link href="/analyses" onClick={closeMenu}>
                   <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl border border-transparent text-base text-foreground hover:border-primary/30 hover:bg-secondary/70" size="lg">
                     <BookOpen className="w-5 h-5" />

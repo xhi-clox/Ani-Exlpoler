@@ -222,6 +222,12 @@ CREATE TABLE IF NOT EXISTS favorite_works (
 
 CREATE INDEX IF NOT EXISTS idx_favorite_works_user ON favorite_works(user_id);
 
+ALTER TABLE favorite_works ADD COLUMN IF NOT EXISTS external_id VARCHAR(120) DEFAULT '';
+ALTER TABLE favorite_works ADD COLUMN IF NOT EXISTS source VARCHAR(40) DEFAULT '';
+ALTER TABLE favorite_works ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+
+CREATE INDEX IF NOT EXISTS idx_favorite_works_user_type ON favorite_works(user_id, work_type);
+
 CREATE TABLE IF NOT EXISTS profile_quotes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

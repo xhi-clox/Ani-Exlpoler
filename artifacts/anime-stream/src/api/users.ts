@@ -13,6 +13,7 @@ import type {
   TasteDimensionEntry,
   CurrentlyIntoEntry,
   InterestEntry,
+  ProfileWorkType,
 } from "../types";
 
 export interface ProfileUpdate {
@@ -167,16 +168,60 @@ export function getFavoriteWorks(username: string): Promise<{ results: FavoriteW
   return apiRequest(`/users/${encodeURIComponent(username)}/favorite-works`);
 }
 
+export interface FavoriteWorkInput {
+  title: string;
+  type?: ProfileWorkType | string;
+  meta?: string;
+  rating?: string;
+  image_url?: string;
+  anime_id?: number | null;
+  external_id?: string | null;
+  source?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FavoritesResponse {
+  results: FavoriteWorkEntry[];
+  byCategory: Partial<Record<ProfileWorkType, FavoriteWorkEntry[]>>;
+  counts: Partial<Record<ProfileWorkType, number>>;
+}
+
+export interface FavoritesCategoryResponse {
+  category: ProfileWorkType;
+  count: number;
+  results: FavoriteWorkEntry[];
+}
+
+export function getFavorites(username: string): Promise<FavoritesResponse> {
+  return apiRequest(`/users/${encodeURIComponent(username)}/favorites`);
+}
+
+export function getFavoritesByCategory(
+  username: string,
+  category: ProfileWorkType,
+): Promise<FavoritesCategoryResponse> {
+  return apiRequest(
+    `/users/${encodeURIComponent(username)}/favorites/${encodeURIComponent(category)}`,
+  );
+}
+
+export function setFavoritesByCategory(
+  username: string,
+  category: ProfileWorkType,
+  items: FavoriteWorkInput[],
+): Promise<FavoritesCategoryResponse> {
+  return apiRequest(
+    `/users/${encodeURIComponent(username)}/favorites/${encodeURIComponent(category)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ items }),
+    },
+  );
+}
+
 export function setFavoriteWorks(
   username: string,
-  items: {
-    title: string;
-    type?: string;
-    meta?: string;
-    rating?: string;
-    image_url?: string;
-    anime_id?: number | null;
-  }[],
+  items: FavoriteWorkInput[],
 ): Promise<{ results: FavoriteWorkEntry[] }> {
   return apiRequest(`/users/${encodeURIComponent(username)}/favorite-works`, {
     method: "PUT",
