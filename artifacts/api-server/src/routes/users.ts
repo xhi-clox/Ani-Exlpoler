@@ -45,7 +45,7 @@ router.get("/:username/quotes", getProfileQuotes);
 router.put("/:username/quotes", requireAuth, setProfileQuotes);
 router.post("/:username/upvote-taste", requireAuth, upvoteProfile);
 router.delete("/:username/upvote-taste", requireAuth, removeProfileUpvote);
-router.get("/:username/collections", listCollections);
+router.get("/:username/collections", optionalAuth, listCollections);
 router.post("/:username/collections", requireAuth, createCollection);
 
 export default router;
